@@ -1,0 +1,9 @@
+/**
+ * 
+ */
+/**
+ * @author ssissons
+ *
+ */
+module JavaTraining {
+}
