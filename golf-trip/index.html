@@ -278,6 +278,7 @@ table.st{width:100%;border-collapse:collapse;font-size:14px}
     <button class="tab" data-view="photos">Photos</button>
     <button class="tab" data-view="trip">Trip standings</button>
     <button class="tab" data-view="winners">Past winners</button>
+    <button class="tab" data-view="handicaps">Handicaps</button>
     <button class="tab" data-view="formats">Formats</button>
     <button class="tab" data-view="setup" id="setupTab">Setup</button>
   </div>
@@ -328,7 +329,35 @@ const firstName = pid => pname(pid).split(' ')[0];
 const sortedPlayers = () => Object.values(S.players).sort((a, b) => String(a.name).localeCompare(String(b.name)));
 const fmt = r => FORMATS[r?.format] || FORMATS.stableford;
 function course(r) { return { par: Array.isArray(r.par) && r.par.length === 18 ? r.par.map(Number) : DEFAULT_PAR, si: Array.isArray(r.si) && r.si.length === 18 ? r.si.map(Number) : DEFAULT_SI }; }
-function baseH(r, pid) { const o = r.hcp?.[pid]; const v = (o !== undefined && o !== null && o !== '') ? Number(o) : Number(S.players[pid]?.hcp ?? 0); return isFinite(v) ? v : 0; }
+/* Handicap ledger: starting handicap, then adjusted after each Final round (see Handicaps tab). */
+let HC = null;
+const HCP_RULE = { target: 36, buffer: 32, raisePerPt: 0.5, maxRaise: 3, min: 0, max: 54 };
+function hcpTable() {
+  if (HC) return HC;
+  const cur = {}, start = {}, used = {}, adj = {};
+  Object.values(S.players).forEach(p => { const v = Number(p.hcp ?? 0); cur[p.id] = start[p.id] = isFinite(v) ? v : 0; });
+  const auto = S.trip.autoHcp !== false;
+  sortedRounds().forEach(r => {
+    used[r.id] = {}; adj[r.id] = {}; const C = course(r);
+    for (const pid in cur) {
+      const o = r.hcp?.[pid]; const ov = (o !== undefined && o !== null && o !== '') ? Number(o) : NaN;
+      const h = isFinite(ov) ? ov : cur[pid]; used[r.id][pid] = h;
+      if (!auto || r.status !== 'final' || r.format === 'ambrose') continue;
+      let pts = 0, n = 0; const ph = Math.round(h);
+      for (let i = 1; i <= 18; i++) { const g = gv(r, pid, i); if (g == null) break; n++; pts += stbl(C.par[i - 1], g, shots(ph, C.si[i - 1])); }
+      if (n < 18) continue;
+      let d = 0;
+      if (pts > HCP_RULE.target) d = -(pts - HCP_RULE.target);
+      else if (pts < HCP_RULE.buffer && r.format !== 'fourbbb') d = Math.min(HCP_RULE.maxRaise, (HCP_RULE.buffer - pts) * HCP_RULE.raisePerPt);
+      const nh = Math.max(HCP_RULE.min, Math.min(HCP_RULE.max, h + d));
+      adj[r.id][pid] = { pts, from: h, to: nh, d: nh - h }; cur[pid] = nh;
+    }
+  });
+  return HC = { start, cur, used, adj };
+}
+const fmtH = v => { v = Number(v) || 0; return Number.isInteger(v) ? String(v) : v.toFixed(1); };
+const curH = pid => hcpTable().cur[pid] ?? Number(S.players[pid]?.hcp ?? 0);
+function baseH(r, pid) { const v = hcpTable().used[r.id]?.[pid]; return v != null && isFinite(v) ? v : (Number(S.players[pid]?.hcp ?? 0) || 0); }
 function phcp(r, pid) { return Math.round(baseH(r, pid) * fmt(r).allowance); }
 function ambroseHcp(r, members) { if (!members.length) return 0; return Math.round(members.reduce((s, p) => s + baseH(r, p), 0) / (2 * members.length)); }
 function shots(ph, si) {
@@ -491,7 +520,7 @@ function subscribe(timer) {
   const done = (k) => { S.loaded[k] = 1; if (['trip', 'players', 'rounds', 'scores'].every(x => S.loaded[x])) { clearTimeout(timer); if (S.mode === 'loading') S.mode = 'live'; } render(); };
   const onErr = (e) => { clearTimeout(timer); S.mode = 'offline'; S.err = e?.message; render(); };
   const intoMap = snap => Object.fromEntries(snap.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
-  S.db.doc('trip/main').onSnapshot(s => { const d = s.exists ? s.data() : {}; S.real = S.real || {}; S.real.trip = { name: d.name || '', points: d.points || DEFAULT_POINTS, ...(d.pinHash ? { pinHash: d.pinHash } : {}) }; if (S.backend === 'firebase') S.canEdit = !!d.pinHash && LS.get('golf.pin', '') === d.pinHash; if (!S.demo) S.trip = S.real.trip; done('trip'); }, onErr);
+  S.db.doc('trip/main').onSnapshot(s => { const d = s.exists ? s.data() : {}; S.real = S.real || {}; S.real.trip = { name: d.name || '', points: d.points || DEFAULT_POINTS, autoHcp: d.autoHcp !== false, ...(d.pinHash ? { pinHash: d.pinHash } : {}) }; if (S.backend === 'firebase') S.canEdit = !!d.pinHash && LS.get('golf.pin', '') === d.pinHash; if (!S.demo) S.trip = S.real.trip; done('trip'); }, onErr);
   S.db.collection('players').onSnapshot(s => { S.real = S.real || {}; S.real.players = intoMap(s); if (!S.demo) S.players = S.real.players; done('players'); }, onErr);
   S.db.collection('rounds').onSnapshot(s => { S.real = S.real || {}; S.real.rounds = intoMap(s); if (!S.demo) S.rounds = S.real.rounds; done('rounds'); }, onErr);
   S.db.collection('winners').onSnapshot(s => { S.real = S.real || {}; S.real.winners = intoMap(s); if (!S.demo) S.winners = S.real.winners; render(); }, () => {});
@@ -527,13 +556,13 @@ function sampleTrip() {
   const ids = Object.keys(players);
   const parA = DEFAULT_PAR, parB = [5,4,3,4,4,5,3,4,4, 4,4,3,5,4,3,4,5,4], parC = [4,3,5,4,4,3,4,5,4, 4,5,3,4,4,3,4,4,5];
   const rounds = {
-    rs1: { id: 'rs1', order: 1, name: 'Round 1', course: 'Sandy Creek Links', date: 'Fri', format: 'ambrose', status: 'final', par: parA, si: DEFAULT_SI,
-      teams: [{ id: 'ts1', name: 'Sandbaggers', playerIds: [ids[0], ids[2], ids[7], ids[9]] }, { id: 'ts2', name: 'Grip It & Sip It', playerIds: [ids[5], ids[6], ids[3], ids[4]] }, { id: 'ts3', name: 'Shanks a Lot', playerIds: [ids[10], ids[11], ids[8], ids[1]] }],
+    rs1: { id: 'rs1', order: 1, name: 'Round 1', course: 'Sandy Creek Links', date: 'Fri', format: 'stableford', status: 'final', par: parA, si: DEFAULT_SI,
       sides: [{ id: 'sd1', label: 'Nearest the pin #7', winner: ids[3], points: 2 }, { id: 'sd2', label: 'Longest drive #4', winner: ids[5], points: 2 }] },
+    rs3: { id: 'rs3', order: 3, name: 'Round 3', course: 'Ironbark Valley', date: 'Sun', format: 'ambrose', status: 'upcoming', par: parC, si: DEFAULT_SI, sides: [], teamSize: 4,
+      teams: [{ id: 'ts1', name: 'Sandbaggers', playerIds: [ids[0], ids[2], ids[7], ids[9]] }, { id: 'ts2', name: 'Grip It & Sip It', playerIds: [ids[5], ids[6], ids[3], ids[4]] }, { id: 'ts3', name: 'Shanks a Lot', playerIds: [ids[10], ids[11], ids[8], ids[1]] }] },
     rs2: { id: 'rs2', order: 2, name: 'Round 2', course: 'Ridgeline Golf Club', date: 'Sat', format: 'fourbbb', status: 'live', par: parB, si: [9,3,17,1,11,7,15,5,13, 10,4,18,8,2,16,12,6,14],
       teams: [[0, 6], [5, 11], [10, 2], [3, 9], [8, 4], [1, 7]].map((p, i) => ({ id: 'tb' + i, name: '', playerIds: p.map(k => ids[k]) })),
       sides: [{ id: 'sd3', label: 'Nearest the pin #3', winner: ids[11], points: 2 }] },
-    rs3: { id: 'rs3', order: 3, name: 'Round 3', course: 'Ironbark Valley', date: 'Sun', format: 'stableford', status: 'upcoming', par: parC, si: DEFAULT_SI, sides: [] },
   };
   const scores = {};
   const play = (r, key, hcp, upto, skill) => {
@@ -546,7 +575,7 @@ function sampleTrip() {
     scores[r.id + '__' + key] = { id: r.id + '__' + key, roundId: r.id, key, holes };
   };
   S.players = players; S.rounds = rounds;
-  rounds.rs1.teams.forEach(t => play(rounds.rs1, t.id, ambroseHcp(rounds.rs1, t.playerIds), 18, -0.1));
+  ids.forEach((pid, i) => play(rounds.rs1, pid, players[pid].hcp + [-6, 3, 8, 0, -2, 4, 10, -4, 1, 5, -3, 2][i], 18, 0.9));
   const thruR2 = [11, 12, 10, 11, 9, 12];
   rounds.rs2.teams.forEach((t, i) => t.playerIds.forEach(pid => play(rounds.rs2, pid, Math.round(players[pid].hcp * .9), thruR2[i], 0.85)));
   const winners = {
@@ -809,11 +838,12 @@ function viewSetup() {
       <div class="field"><label for="tripNameIn">Trip name</label><input class="inp" id="tripNameIn" data-save="tripName" value="${esc(S.trip.name)}" placeholder="Boys Trip 2026"></div>
       <div class="field"><label for="pointsIn">Points for 1st, 2nd, 3rd…</label><input class="inp num" id="pointsIn" data-save="points" value="${esc((S.trip.points || DEFAULT_POINTS).join(', '))}"></div>
     </div>
+    <label class="row" style="gap:8px;font-weight:600"><input type="checkbox" id="autoHcpIn" data-save="autoHcp" ${S.trip.autoHcp !== false ? 'checked' : ''}> Adjust handicaps after each round (rules on the Handicaps tab)</label>
   </section>
   <section class="panel stack">
-    <div class="spread"><div><h3>Players</h3><div class="sub">${ps.length} on the trip. Handicap is the playing handicap for the trip.</div></div></div>
+    <div class="spread"><div><h3>Players</h3><div class="sub">${ps.length} on the trip. Enter a starting handicap. A guess is fine; see the Handicaps tab.</div></div></div>
     <div class="plist">
-      <div class="prow sub"><span>Name</span><span>Handicap</span><span></span></div>
+      <div class="prow sub"><span>Name</span><span>Starting hcp</span><span></span></div>
       ${ps.map(p => `<div class="prow"><input class="inp" id="pn_${p.id}" data-save="pname" data-id="${p.id}" value="${esc(p.name)}" aria-label="Name"><input class="inp num" id="ph_${p.id}" type="number" inputmode="decimal" step="1" data-save="phcp" data-id="${p.id}" value="${esc(p.hcp)}" aria-label="Handicap"><button class="iconbtn" data-act="delPlayer" data-id="${p.id}" aria-label="Remove ${esc(p.name)}">×</button></div>`).join('')}
       <form class="prow" id="addPlayer"><input class="inp" id="newPName" placeholder="Add a player" required><input class="inp num" id="newPHcp" type="number" inputmode="decimal" placeholder="Hcp"><button class="iconbtn" aria-label="Add player" style="color:var(--green-2);font-weight:800">+</button></form>
     </div>
@@ -883,6 +913,7 @@ function drawTeams(r) {
 
 /* ---------- main render ---------- */
 function render() {
+  HC = null;
   renderHeader();
   const main = $('#main');
   if (S.mode === 'loading') { main.innerHTML = '<div class="empty">Loading the board…</div>'; return; }
@@ -892,7 +923,7 @@ function render() {
   let selStart = null; try { selStart = focusId ? ae.selectionStart : null; } catch (e) {}
   const dirty = {}; main.querySelectorAll('[data-dirty]').forEach(el => { if (el.id) dirty[el.id] = el.value; });
   const scrollY = window.scrollY;
-  const views = { board: viewBoard, score: viewScore, cards: viewCards, players: viewPlayers, photos: viewPhotos, trip: viewTrip, winners: viewWinners, formats: viewFormats, setup: viewSetup };
+  const views = { board: viewBoard, score: viewScore, cards: viewCards, players: viewPlayers, photos: viewPhotos, trip: viewTrip, winners: viewWinners, handicaps: viewHandicaps, formats: viewFormats, setup: viewSetup };
   main.innerHTML = (views[S.view] || viewBoard)();
   renderLightbox();
   for (const id in dirty) { const el = document.getElementById(id); if (el) { el.value = dirty[id]; el.dataset.dirty = '1'; } }
@@ -901,7 +932,7 @@ function render() {
 }
 
 /* ---------- routing ---------- */
-const VIEWS = ['board', 'score', 'cards', 'players', 'photos', 'trip', 'winners', 'formats', 'setup'];
+const VIEWS = ['board', 'score', 'cards', 'players', 'photos', 'trip', 'winners', 'handicaps', 'formats', 'setup'];
 function route() { const h = location.hash.slice(1); S.view = VIEWS.includes(h) ? h : 'board'; }
 function go(v) { if (v !== 'players') S.profile = null; if (location.hash.slice(1) !== v) location.hash = v; else { S.view = v; render(); } window.scrollTo(0, 0); }
 window.addEventListener('hashchange', () => { route(); render(); });
@@ -991,6 +1022,7 @@ document.addEventListener('change', e => {
   const id = el.dataset.id; const r = S.rounds[id];
   const num = v => v === '' ? null : Number(v);
   switch (k) {
+    case 'autoHcp': setDoc('trip/main', { ...S.trip, autoHcp: el.checked }); break;
     case 'tripName': setDoc('trip/main', { ...S.trip, name: el.value.trim() }); break;
     case 'points': { const pts = el.value.split(/[,\s]+/).map(Number).filter(n => isFinite(n) && n >= 0); if (pts.length) setDoc('trip/main', { ...S.trip, points: pts }); break; }
     case 'pname': if (el.value.trim()) updateDoc('players/' + id, { name: el.value.trim() }); break;
@@ -1022,6 +1054,62 @@ document.addEventListener('submit', e => {
   const hcp = Number($('#newPHcp').value) || 0;
   setDoc('players/' + uid('p'), { name, hcp });
   $('#newPName').value = ''; $('#newPHcp').value = ''; $('#newPName').focus();
+});
+
+/* ---------- handicaps explainer + ledger ---------- */
+const guessH = score => Math.max(0, Math.min(54, Math.round((score - 72) * 0.92)));
+function viewHandicaps() {
+  const T = hcpTable(); const rs = sortedRounds(); const ps = sortedPlayers(); const auto = S.trip.autoHcp !== false;
+  const g = S.guessScore || 95;
+  const delta = d => d === 0 ? '<span class="sub">no change</span>' : `<b style="color:${d < 0 ? 'var(--red)' : 'var(--good)'}">${d < 0 ? '▼ ' : '▲ '}${fmtH(Math.abs(d))}</b>`;
+  const ledger = ps.length ? `<section class="board"><div class="board-top"><div><h3>Handicap ledger</h3><div class="sub">${auto ? 'Updates when a round is marked Final.' : 'Automatic adjustments are switched off.'}</div></div></div>
+    <div class="tbl-wrap"><table class="st num"><thead><tr><th style="text-align:left">Player</th><th>Start</th>${rs.map(r => `<th title="${esc(r.course || '')}">${esc(r.name)}</th>`).join('')}<th>Now</th></tr></thead>
+    <tbody>${ps.map(p => `<tr><td style="text-align:left"><span class="who">${avatar(p.id, 28)}<span>${esc(p.name)}</span></span></td><td>${fmtH(T.start[p.id])}</td>${rs.map(r => {
+      const a = T.adj[r.id]?.[p.id];
+      if (a) return `<td><span class="sub">${a.pts} pts</span><br>${delta(a.d)}</td>`;
+      const inRound = units(r).some(u => u.members.includes(p.id));
+      return `<td class="sub">${!inRound ? '–' : r.format === 'ambrose' ? 'Team' : r.status === 'final' ? 'Card incomplete' : 'Plays off ' + fmtH(T.used[r.id]?.[p.id])}</td>`; }).join('')}
+      <td class="total">${fmtH(T.cur[p.id])}</td></tr>`).join('')}</tbody></table></div></section>` : '';
+  return `<div class="stack">${demoBanner()}
+    <div><h2>Handicaps</h2><p class="sub" style="max-width:62ch;margin:6px 0 0">Most of us don't have an official handicap, so everyone starts with a fair guess. The app then corrects it round by round, so a good guess helps but a bad one gets found out.</p></div>
+    <section class="panel stack" style="gap:10px">
+      <h3>What a handicap does</h3>
+      <p style="margin:0;max-width:62ch">Your handicap is roughly how many shots over par you'd shoot on a normal day. On this trip it turns into free shots on the hardest holes, so a hacker and a decent golfer can have a real contest.</p>
+      <ul style="margin:0;padding-left:20px;max-width:62ch;display:grid;gap:6px">
+        <li><b>Where the shots go.</b> Every hole has a stroke index from 1 (hardest) to 18 (easiest). Handicap 14 gets one shot on index 1 to 14. Handicap 22 gets one shot on every hole plus a second on index 1 to 4.</li>
+        <li><b>Nett score.</b> Your actual strokes minus the shots you get on that hole. A 6 on a par 4 where you get a shot is a nett 5, a nett bogey.</li>
+        <li><b>Stableford points</b> come from the nett score: 2 for nett par, 3 for nett birdie, 1 for nett bogey, 0 for worse. Playing exactly to your handicap scores 36 points.</li>
+        <li>The yellow dots on the score entry screen show who gets a shot on each hole.</li>
+      </ul>
+    </section>
+    <section class="panel stack" style="gap:12px">
+      <h3>No official handicap? Start here</h3>
+      <p class="sub" style="margin:0">Pick what you'd usually shoot for 18 holes on a normal par 72 course. Be honest; the app will correct you anyway.</p>
+      <div class="row" style="gap:16px;align-items:center">
+        <div class="field" style="flex:1;min-width:200px"><label for="guessIn">I usually shoot about <b class="num" id="guessOut">${g}</b></label><input type="range" id="guessIn" min="72" max="130" step="1" value="${g}"></div>
+        <div class="tile num" style="min-width:110px;padding-inline:10px"><span id="guessH">${guessH(g)}</span><small>starting hcp</small></div>
+      </div>
+      <div class="sub">Rough guide: 85 → ${guessH(85)}, 90 → ${guessH(90)}, 95 → ${guessH(95)}, 100 → ${guessH(100)}, 110 → ${guessH(110)}, 120 → ${guessH(120)}. Never played a full round? Start at 36.</div>
+    </section>
+    <section class="panel stack" style="gap:10px">
+      <h3>How handicaps change over the weekend</h3>
+      <p style="margin:0;max-width:62ch">After each round is marked <b>Final</b>, everyone's Stableford points for that round are worked out on their own ball at full handicap. Your handicap for the next round is adjusted:</p>
+      <ul style="margin:0;padding-left:20px;max-width:62ch;display:grid;gap:6px">
+        <li><b>Over ${HCP_RULE.target} points:</b> cut by 1 for every point over. Score 41 and you lose 5 shots. Sandbaggers, you've been warned.</li>
+        <li><b>${HCP_RULE.buffer} to ${HCP_RULE.target} points:</b> no change.</li>
+        <li><b>Under ${HCP_RULE.buffer} points:</b> up by ${HCP_RULE.raisePerPt} for every point under, at most ${HCP_RULE.maxRaise} per round. Bad days happen, but one bad day shouldn't hand you the trophy.</li>
+        <li><b>Best Ball rounds</b> can only cut. You often pick up when your partner has the hole covered, so a low score there doesn't mean much.</li>
+        <li><b>Ambrose rounds</b> don't change anyone's handicap, as there's no individual score.</li>
+        <li>You need a full 18-hole card to be adjusted. Handicaps stay between ${HCP_RULE.min} and ${HCP_RULE.max}. The organiser can still set someone's handicap for a single round in Setup.</li>
+      </ul>
+    </section>
+    ${ledger}
+  </div>`;
+}
+document.addEventListener('input', e => {
+  if (e.target.id !== 'guessIn') return;
+  const v = Number(e.target.value); S.guessScore = v;
+  const o = $('#guessOut'), h = $('#guessH'); if (o) o.textContent = v; if (h) h.textContent = guessH(v);
 });
 
 /* ---------- past winners (honours board) ---------- */
@@ -1165,7 +1253,7 @@ function viewPlayers() {
     <div><h2>The players</h2><div class="sub">${missing ? `${missing} still need${missing === 1 ? 's' : ''} a photo. Tap your name to add one.` : 'Everyone has a photo. Good lads.'}</div></div>
     <div class="pgrid">${ps.map(p => `<button class="pcard" data-act="profile" data-id="${p.id}">
       ${avatar(p.id, 84)}<b>${esc(p.name)}</b><span class="nick">${p.nickname ? '“' + esc(p.nickname) + '”' : ''}</span>
-      <span class="stat num">Hcp ${esc(p.hcp ?? 0)} · ${st[p.id] ? ordinal(st[p.id].pos) : '–'}</span>
+      <span class="stat num">Hcp ${fmtH(curH(p.id))} · ${st[p.id] ? ordinal(st[p.id].pos) : '–'}</span>
       ${safeUrl(p.photo) ? '' : '<span class="need">Needs a photo</span>'}</button>`).join('')}</div></div>`;
 }
 function viewProfile(pid) {
@@ -1183,7 +1271,7 @@ function viewProfile(pid) {
         <div class="stack" style="gap:6px;min-width:0">
           <h2 style="font-size:34px">${esc(p.name)}</h2>
           ${p.nickname ? `<div class="sub" style="font-style:italic">“${esc(p.nickname)}”</div>` : ''}
-          <div class="row"><span class="status">Hcp ${esc(p.hcp ?? 0)}</span>${st ? `<span class="status final">${ordinal(st.pos)} on the trip · ${st.total} pts</span>` : ''}</div>
+          <div class="row"><span class="status">Hcp ${fmtH(curH(pid))}${curH(pid) !== Number(p.hcp ?? 0) ? ` (started ${fmtH(p.hcp ?? 0)})` : ''}</span>${st ? `<span class="status final">${ordinal(st.pos)} on the trip · ${st.total} pts</span>` : ''}</div>
           ${ro ? '' : `<div class="row" style="margin-top:6px">
             <label class="btn sm primary filebtn">${safeUrl(p.photo) ? 'Change photo' : 'Add photo'}<input type="file" accept="image/*" id="photoIn" data-pid="${pid}"></label>
             ${isMe ? '<span class="sub">This is you</span>' : `<button class="btn sm" data-act="iam" data-id="${pid}">This is me</button>`}</div>`}
