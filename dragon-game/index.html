@@ -154,7 +154,7 @@ dialog p { color: var(--muted); margin: 0 0 14px; }
   cursor: pointer; text-align: left; font: inherit; color: var(--ink); display: flex; flex-direction: column; gap: 4px;
 }
 .card[aria-current="true"] { border-color: var(--gold); }
-.card canvas { width: 100%; aspect-ratio: 6/5; border-radius: 10px; background: #2b2350; }
+.card canvas { width: 100%; aspect-ratio: 6/5; border-radius: 10px; background: #ddd3f3; }
 .card b { font-family: var(--font-display); font-weight: 400; font-size: 1.1rem; }
 .card small { color: var(--muted); font-size: 0.75rem; }
 .card.new { align-items: center; justify-content: center; border: 2px dashed var(--line); background: transparent; min-height: 150px; text-align: center; }
@@ -289,29 +289,105 @@ const unlocked = (d, id) => { const u = UNLOCKS.find(u => u.id === id); return !
 const PALETTE = ['#e8473b', '#f59e2b', '#f7d046', '#7cc95b', '#2f9e8f', '#3f7fd9', '#7b5cd6', '#d35fae',
   '#f4efe6', '#3a3340', '#8a5a3c', '#9fd8f0'];
 
-// ---------- geometry (dragon faces right, local 600x500) ----------
+// ---------- geometry (fluffy dragon sitting, facing the viewer; local 600x500, ground at y=440) ----------
 const P = s => new Path2D(s);
+const MIRROR = new DOMMatrix([-1, 0, 0, 1, 600, 0]);
+const mirrored = p => { const m = new Path2D(); m.addPath(p, MIRROR); return m; };
+const both = p => { const m = new Path2D(); m.addPath(p); m.addPath(p, MIRROR); return m; };
+function cubicPt(p, t) {
+  const u = 1 - t;
+  return [0, 1].map(i => u * u * u * p[0][i] + 3 * u * u * t * p[1][i] + 3 * u * t * t * p[2][i] + t * t * t * p[3][i]);
+}
+// a tapered limb/tail/horn along a cubic centre line
+function ribbon(p, w0, w1, n = 28) {
+  const L = [], R = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, a = cubicPt(p, Math.max(0, t - 0.01)), b = cubicPt(p, Math.min(1, t + 0.01)), c = cubicPt(p, t);
+    let nx = -(b[1] - a[1]), ny = b[0] - a[0]; const len = Math.hypot(nx, ny) || 1; nx /= len; ny /= len;
+    const w = (w0 + (w1 - w0) * t) / 2;
+    L.push([c[0] + nx * w, c[1] + ny * w]); R.push([c[0] - nx * w, c[1] - ny * w]);
+  }
+  const path = new Path2D();
+  path.moveTo(...L[0]);
+  for (const q of L.slice(1)) path.lineTo(...q);
+  const end = cubicPt(p, 1);
+  path.quadraticCurveTo(end[0] + (L[n][0] - R[n][0]) * 0.1 + (end[0] - cubicPt(p, 0.97)[0]) * 3, end[1] + (end[1] - cubicPt(p, 0.97)[1]) * 3, ...R[n]);
+  for (const q of R.reverse().slice(1)) path.lineTo(...q);
+  path.closePath();
+  return path;
+}
+// fur: an ellipse whose edge is a ring of soft pointed tufts
+function furBlob(cx, cy, rx, ry, n, depth, a0 = 0, a1 = Math.PI * 2) {
+  const path = new Path2D(), pts = [];
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + (a1 - a0) * (i + (i % n ? Math.sin(i * 3.7 + cx) * 0.25 : 0)) / n, j = i % n ? 1 + Math.sin(i * 2.3 + cy) * 0.05 : 1;
+    pts.push([cx + Math.cos(a) * rx * j, cy + Math.sin(a) * ry * j]);
+  }
+  path.moveTo(...pts[0]);
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+    const k = depth / Math.hypot(mx - cx, my - cy);
+    path.quadraticCurveTo(mx - (mx - cx) * k, my - (my - cy) * k, x1, y1);
+  }
+  path.closePath();
+  return path;
+}
+const ellipse = (cx, cy, rx, ry) => { const p = new Path2D(); p.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); return p; };
+
+// feathered wing (left side; the right is its mirror)
+const WING_TIPS = [[40, 136], [32, 186], [40, 234], [56, 276], [80, 312], [112, 338], [150, 350], [190, 342], [224, 322], [252, 300]];
+const wingL = (() => {
+  const p = new Path2D();
+  p.moveTo(266, 262);
+  p.bezierCurveTo(236, 200, 196, 124, 146, 74);
+  p.bezierCurveTo(118, 50, 80, 56, 58, 86);
+  let prev = [58, 86];
+  for (const tip of WING_TIPS) {
+    const mx = (prev[0] + tip[0]) / 2, my = (prev[1] + tip[1]) / 2;
+    p.quadraticCurveTo(mx + (180 - mx) * 0.38, my + (180 - my) * 0.38, tip[0], tip[1]);
+    prev = tip;
+  }
+  p.closePath();
+  return p;
+})();
+const head = new Path2D();
+head.addPath(ellipse(300, 158, 92, 70));
+head.addPath(furBlob(222, 188, 30, 25, 8, 7));
+head.addPath(furBlob(378, 188, 30, 25, 8, 7));
+head.addPath(furBlob(300, 96, 28, 15, 8, 6));
+const earL = P('M238 116 C200 100 154 120 128 168 C162 180 206 172 240 156 Z');
+const earInnerL = P('M234 126 C204 118 166 134 146 164 C172 170 204 164 234 150 Z');
+const legL = ribbon([[266, 296], [264, 350], [262, 392], [262, 428]], 46, 38);
 const G = {
-  tail: P('M205 318 C160 335 115 325 92 296 C76 276 74 252 84 236 C92 252 100 268 118 280 C140 294 172 296 200 282 Z M84 240 L52 226 L58 192 L88 186 L102 214 Z'),
-  backLeg: P('M222 322 C204 356 198 398 208 430 C224 438 248 438 258 430 C254 404 254 376 268 350 Z'),
-  body: P('M188 300 C186 236 250 206 322 212 C386 218 424 256 422 304 C420 356 372 388 300 388 C230 388 190 360 188 300 Z'),
-  frontLeg: P('M352 336 C344 368 346 402 356 430 C372 438 396 438 406 430 C402 404 394 372 404 340 Z'),
-  neck: P('M340 236 C356 198 376 170 398 150 C420 162 440 180 452 198 C432 222 418 252 412 292 C392 270 366 250 340 236 Z'),
-  head: P('M386 148 C384 108 422 86 458 90 C492 94 512 114 522 136 C548 140 564 156 560 176 C556 196 532 204 504 202 C478 208 444 210 420 200 C396 190 386 172 386 148 Z'),
-  belly: P('M452 198 C436 222 424 252 418 292 C412 336 380 372 318 384 C342 352 360 320 372 292 C384 262 396 236 410 214 C424 206 440 200 452 198 Z'),
-  wing: P('M300 228 C288 180 266 128 244 84 C214 96 182 86 150 62 C162 96 158 122 142 142 C166 142 182 156 188 176 C208 172 228 186 234 206 C254 206 272 216 284 236 Z'),
+  wingL, wingR: mirrored(wingL),
+  tail: ribbon([[372, 418], [462, 462], [572, 452], [552, 372]], 32, 14),
+  tuft: furBlob(552, 346, 22, 34, 9, 10),
+  body: ellipse(300, 335, 106, 105),
+  haunches: both(furBlob(208, 386, 74, 56, 13, 6)),
+  backFeet: both(ellipse(172, 433, 36, 14)),
+  frontLegs: both(legL),
+  paws: both(ellipse(262, 432, 27, 15)),
+  bib: furBlob(300, 290, 74, 94, 18, 11),
+  ears: both(earL),
+  head,
+  muzzle: ellipse(300, 200, 42, 27),
 };
-G.bodyParts = ['tail', 'backLeg', 'body', 'neck', 'head', 'frontLeg', 'belly'];
+G.earInner = both(earInnerL);
+const BODY_KEYS = ['tail', 'tuft', 'body', 'haunches', 'backFeet', 'frontLegs', 'paws', 'bib', 'ears', 'head', 'muzzle'];
 G.union = new Path2D();
-for (const k of ['tail', 'backLeg', 'body', 'neck', 'head', 'frontLeg']) G.union.addPath(G[k]);
-const WING = {
-  near: { pivot: [300, 228], dx: 0, dy: 0 },
-  far: { pivot: [332, 216], dx: 32, dy: -12 },
-};
-const farWingPath = new Path2D(); farWingPath.addPath(G.wing, new DOMMatrix().translate(WING.far.dx, WING.far.dy));
-G.farWing = farWingPath;
-const WING_BONES = [[244, 84], [150, 62], [142, 142], [188, 176], [234, 206]];
-const EYE = [470, 134], MOUTH = [556, 178];
+for (const k of BODY_KEYS) G.union.addPath(G[k]);
+const WING = { far: { pivot: [266, 262], sign: 1 }, near: { pivot: [334, 262], sign: -1 } };
+const EYES = [[262, 160], [338, 160]], MOUTH = [300, 212];
+// horns grow with the stage: nubs, then curls, then curls with a fork
+const hornBase = ribbon([[268, 106], [252, 72], [234, 48], [256, 20]], 17, 3);
+const hornFork = ribbon([[248, 62], [238, 52], [226, 48], [218, 36]], 8, 2);
+const HORNS = [0.36, 0.72, 1].map((s, i) => {
+  const m = new DOMMatrix().translate(268, 106).scale(s).translate(-268, -106), p = new Path2D();
+  p.addPath(hornBase, m); p.addPath(hornBase, MIRROR.multiply(m));
+  if (i === 2) { p.addPath(hornFork, m); p.addPath(hornFork, MIRROR.multiply(m)); }
+  return p;
+});
+const FUR_MARKS = [[292, 246], [314, 290], [282, 330], [320, 352], [190, 372], [410, 372], [300, 118]];
 const EGG = (() => {
   const p = new Path2D();
   p.moveTo(300, 140);
@@ -322,19 +398,23 @@ const EGG = (() => {
   p.closePath();
   return p;
 })();
-// part list for hit tests, topmost first
+// paintable parts, topmost first
 const PARTS = [
-  { id: 'nearwing', layer: 'near', path: G.wing },
+  { id: 'muzzle', layer: 'body', path: G.muzzle },
   { id: 'head', layer: 'body', path: G.head },
-  { id: 'belly', layer: 'body', path: G.belly },
-  { id: 'frontLeg', layer: 'body', path: G.frontLeg },
-  { id: 'neck', layer: 'body', path: G.neck },
+  { id: 'ears', layer: 'body', path: G.ears },
+  { id: 'paws', layer: 'body', path: G.paws },
+  { id: 'frontLegs', layer: 'body', path: G.frontLegs },
+  { id: 'bib', layer: 'body', path: G.bib },
+  { id: 'backFeet', layer: 'body', path: G.backFeet },
+  { id: 'haunches', layer: 'body', path: G.haunches },
   { id: 'body', layer: 'body', path: G.body },
-  { id: 'backLeg', layer: 'body', path: G.backLeg },
+  { id: 'tuft', layer: 'body', path: G.tuft },
   { id: 'tail', layer: 'body', path: G.tail },
-  { id: 'farwing', layer: 'far', path: G.farWing },
+  { id: 'wingR', layer: 'near', path: G.wingR },
+  { id: 'wingL', layer: 'far', path: G.wingL },
 ];
-const LAYER_CLIP = { body: G.union, near: G.wing, far: G.farWing };
+const LAYER_CLIP = { body: G.union, near: G.wingR, far: G.wingL };
 const hitCtx = document.createElement('canvas').getContext('2d');
 const partAt = (x, y) => PARTS.find(p => hitCtx.isPointInPath(p.path, x, y));
 
@@ -381,7 +461,7 @@ function persistLayers(d) {
   saveTimer = setTimeout(() => {
     const L = layerCache.get(d.id); if (!L) return;
     for (const k of ['body', 'near', 'far']) {
-      try { localStorage.setItem(`hh-layer-${d.id}-${k}`, L[k].toDataURL('image/png')); }
+      try { localStorage.setItem(`hh2-layer-${d.id}-${k}`, L[k].toDataURL('image/png')); }
       catch (e) { toast('Your browser is out of room to save paint.'); }
     }
   }, 700);
@@ -394,7 +474,7 @@ function layersFor(d) {
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     L[k] = c;
     let url = null;
-    try { url = localStorage.getItem(`hh-layer-${d.id}-${k}`); } catch (e) { url = null; }
+    try { url = localStorage.getItem(`hh2-layer-${d.id}-${k}`); } catch (e) { url = null; }
     if (url) { const img = new Image(); img.onload = () => { c.getContext('2d').drawImage(img, 0, 0); drawThumbs(); }; img.src = url; }
   }
   layerCache.set(d.id, L);
@@ -406,9 +486,10 @@ const hsl = (h, s, l, a = 1) => `hsla(${((h % 360) + 360) % 360},${s}%,${l}%,${a
 function colors(d) {
   const h = d.hue;
   return {
-    body: hsl(h, 58, 52), bodyDark: hsl(h, 50, 38), belly: hsl(h + 32, 72, 78), bellyLine: hsl(h + 20, 50, 62),
-    wing: hsl(h - 18, 44, 40), wingIn: hsl(h - 10, 50, 48), bone: hsl(h - 18, 40, 28),
-    horn: hsl(40, 35, 86), hornDark: hsl(35, 25, 62), outline: hsl(h, 45, 16), eye: hsl(d.eyeHue, 70, 45),
+    body: hsl(h, 46, 80), shade: hsl(h, 36, 68), fluff: hsl(h, 50, 95), fur: hsl(h, 28, 55),
+    wing: hsl(h, 44, 86), feather: hsl(h, 30, 66), tuft: hsl(h, 40, 72),
+    horn: hsl(320, 10, 60), hornDark: hsl(320, 12, 44), innerEar: '#f4b8bf',
+    outline: hsl(h, 22, 36), eye: hsl(d.eyeHue, 30, 16), eyeRing: hsl(d.eyeHue, 40, 34),
   };
 }
 const speciesOf = d => { let n = SPECIES[0][1]; for (const [h, s] of SPECIES) if (d.hue >= h) n = s; return n; };
@@ -416,168 +497,170 @@ const stageOf = d => { let s = STAGES[0]; for (const st of STAGES) if (d.level >
 const stageIdx = d => STAGES.indexOf(stageOf(d));
 
 // ---------- dragon renderer (local coords) ----------
+function drawWing(ctx, d, c, L, side, o) {
+  const w = WING[side], path = side === 'far' ? G.wingL : G.wingR, mirror = side === 'near';
+  ctx.save();
+  ctx.translate(w.pivot[0], w.pivot[1]); ctx.rotate(w.sign * o.flap); ctx.translate(-w.pivot[0], -w.pivot[1]);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.strokeStyle = c.outline; ctx.lineWidth = 5; ctx.stroke(path);
+  ctx.fillStyle = c.wing; ctx.fill(path);
+  ctx.save(); ctx.clip(path);
+  if (mirror) ctx.transform(-1, 0, 0, 1, 600, 0);
+  const g = ctx.createLinearGradient(70, 90, 200, 330); g.addColorStop(0, 'rgba(255,255,255,0.5)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.fillRect(20, 40, 260, 320);
+  ctx.restore();
+  ctx.drawImage(L[side], 0, 0);
+  // feather detail
+  ctx.save(); ctx.clip(path);
+  if (mirror) ctx.transform(-1, 0, 0, 1, 600, 0);
+  ctx.strokeStyle = c.feather; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.75;
+  for (const [tx, ty] of WING_TIPS.slice(0, 9)) {
+    ctx.beginPath(); ctx.moveTo(180 + (tx - 180) * 0.55, 180 + (ty - 180) * 0.55); ctx.quadraticCurveTo(180 + (tx - 180) * 0.8 + 4, 180 + (ty - 180) * 0.8, tx + (180 - tx) * 0.12, ty + (180 - ty) * 0.12); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.moveTo(78, 108);
+  const row = [[86, 160], [104, 210], [134, 250], [176, 268], [222, 262]];
+  let prev = [78, 108];
+  for (const q of row) { ctx.quadraticCurveTo((prev[0] + q[0]) / 2 + 8, (prev[1] + q[1]) / 2 - 6, q[0], q[1]); prev = q; }
+  ctx.stroke();
+  ctx.restore();
+  ctx.restore();
+}
 function renderDragon(ctx, d, o) {
   const c = colors(d), L = layersFor(d), si = stageIdx(d);
-  const lw = 7;
-  // far wing
-  ctx.save();
-  ctx.translate(WING.far.pivot[0], WING.far.pivot[1]); ctx.rotate(-o.flap * 0.9 + 0.05); ctx.translate(-WING.far.pivot[0], -WING.far.pivot[1]);
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = c.outline; ctx.lineWidth = lw * 2; ctx.stroke(G.farWing);
-  ctx.fillStyle = c.bone; ctx.fill(G.farWing);
-  ctx.drawImage(L.far, 0, 0);
-  ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fill(G.farWing);
-  ctx.restore();
-
-  // body silhouette outline then fills
+  drawWing(ctx, d, c, L, 'far', o);
+  drawWing(ctx, d, c, L, 'near', o);
+  // silhouette outline, then fills
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  ctx.strokeStyle = c.outline; ctx.lineWidth = lw * 2;
-  for (const k of ['tail', 'backLeg', 'body', 'neck', 'head', 'frontLeg']) ctx.stroke(G[k]);
-  if (si >= 1) drawHorns(ctx, c, si, true);
-  if (si >= 2) drawSpikes(ctx, c, true);
-  ctx.fillStyle = c.bodyDark; ctx.fill(G.backLeg);
-  ctx.fillStyle = c.body; ctx.fill(G.tail); ctx.fill(G.body); ctx.fill(G.neck); ctx.fill(G.head);
-  ctx.fillStyle = c.body; ctx.fill(G.frontLeg);
-  ctx.fillStyle = c.belly; ctx.fill(G.belly);
+  ctx.strokeStyle = c.outline; ctx.lineWidth = 5.5;
+  ctx.stroke(G.union);
+  ctx.stroke(HORNS[si]);
+  ctx.fillStyle = c.horn; ctx.fill(HORNS[si]);
+  ctx.fillStyle = c.body;
+  for (const k of ['tail', 'body', 'haunches']) ctx.fill(G[k]);
+  ctx.fillStyle = c.tuft; ctx.fill(G.tuft);
+  ctx.fillStyle = c.shade; ctx.fill(G.backFeet);
+  ctx.fillStyle = c.body; ctx.fill(G.frontLegs); ctx.fill(G.paws);
+  ctx.fillStyle = c.fluff; ctx.fill(G.bib);
+  ctx.fillStyle = c.body; ctx.fill(G.ears); ctx.fill(G.head);
+  ctx.fillStyle = c.fluff; ctx.fill(G.muzzle);
   ctx.drawImage(L.body, 0, 0);
-  // detail lines over paint
-  ctx.save(); ctx.clip(G.belly);
-  ctx.strokeStyle = c.bellyLine; ctx.lineWidth = 3; ctx.globalAlpha = 0.55;
-  for (let i = 0; i < 9; i++) {
-    const k = i / 8, x = 446 - k * 110, y = 210 + k * 160;
-    ctx.beginPath(); ctx.moveTo(x - 50, y - 36); ctx.quadraticCurveTo(x + 4, y + 10, x + 50, y + 36); ctx.stroke();
-  }
+  // soft shading so the body reads as round and fluffy
+  ctx.save(); ctx.clip(G.union);
+  const sh = ctx.createRadialGradient(300, 260, 60, 300, 330, 260);
+  sh.addColorStop(0, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(60,30,90,0.18)');
+  ctx.fillStyle = sh; ctx.fillRect(100, 60, 500, 420);
   ctx.restore();
-  ctx.strokeStyle = c.outline; ctx.lineWidth = lw * 0.8;
-  ctx.save(); ctx.beginPath(); ctx.rect(330, 372, 100, 80); ctx.clip(); ctx.stroke(G.frontLeg); ctx.restore();
-  ctx.beginPath(); ctx.moveTo(238, 400); ctx.quadraticCurveTo(230, 380, 236, 360); ctx.globalAlpha = 0.35; ctx.stroke(); ctx.globalAlpha = 1;
-  // claws
-  ctx.fillStyle = c.horn;
-  for (const [x, y] of [[214, 432], [230, 434], [246, 432], [362, 432], [378, 434], [394, 432]]) {
-    ctx.beginPath(); ctx.moveTo(x - 5, y - 2); ctx.lineTo(x, y + 8); ctx.lineTo(x + 5, y - 2); ctx.closePath(); ctx.fill();
-  }
-  if (si >= 1) drawHorns(ctx, c, si, false);
-  if (si >= 2) drawSpikes(ctx, c, false);
-  drawFace(ctx, d, c, o);
-  // near wing
+  // inner lines over paint
+  ctx.strokeStyle = c.outline; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.6;
+  for (const k of ['bib', 'ears', 'head']) ctx.stroke(G[k]);
+  // legs and haunches: only the parts that show below the chest fluff
   ctx.save();
-  ctx.translate(WING.near.pivot[0], WING.near.pivot[1]); ctx.rotate(-o.flap); ctx.translate(-WING.near.pivot[0], -WING.near.pivot[1]);
-  ctx.strokeStyle = c.outline; ctx.lineWidth = lw * 2; ctx.stroke(G.wing);
-  ctx.fillStyle = c.wing; ctx.fill(G.wing);
-  ctx.save(); ctx.clip(G.wing);
-  const gr = ctx.createRadialGradient(300, 228, 10, 300, 228, 200); gr.addColorStop(0, c.wingIn); gr.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = gr; ctx.fillRect(100, 40, 220, 220);
+  const below = new Path2D(); below.rect(100, 350, 400, 120); below.addPath(G.bib);
+  ctx.clip(below, 'evenodd');
+  ctx.stroke(G.frontLegs); ctx.stroke(G.haunches);
   ctx.restore();
-  ctx.drawImage(L.near, 0, 0);
-  ctx.strokeStyle = c.outline; ctx.lineWidth = 5; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(300, 228); ctx.lineTo(244, 84);
-  for (const [x, y] of WING_BONES.slice(1)) { ctx.moveTo(244, 84); ctx.lineTo(x, y); }
-  ctx.globalAlpha = 0.55; ctx.stroke(); ctx.globalAlpha = 1;
-  ctx.fillStyle = c.horn; ctx.beginPath(); ctx.moveTo(240, 86); ctx.lineTo(234, 64); ctx.lineTo(252, 80); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 0.45; ctx.stroke(G.muzzle); ctx.stroke(G.paws); ctx.stroke(G.tuft);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = c.innerEar; ctx.fill(G.earInner);
+  // toes
+  ctx.strokeStyle = c.outline; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.6;
+  for (const x of [252, 272, 328, 348, 162, 182, 418, 438]) { ctx.beginPath(); ctx.moveTo(x, 440); ctx.lineTo(x, 430); ctx.stroke(); }
+  // fur tufts
+  ctx.strokeStyle = c.fur; ctx.lineWidth = 2; ctx.globalAlpha = 0.4;
+  for (const [x, y] of FUR_MARKS) { ctx.beginPath(); ctx.moveTo(x - 6, y - 3); ctx.quadraticCurveTo(x - 2, y + 1, x, y + 5); ctx.quadraticCurveTo(x + 2, y + 1, x + 6, y - 3); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  // horn ridges
+  ctx.save(); ctx.clip(HORNS[si]); ctx.strokeStyle = c.hornDark; ctx.lineWidth = 2; ctx.globalAlpha = 0.6;
+  for (let y = 30; y < 110; y += 12) { ctx.beginPath(); ctx.moveTo(220, y); ctx.lineTo(380, y + 8); ctx.stroke(); }
   ctx.restore();
+  drawFace(ctx, d, c, o);
   drawAccessories(ctx, d, c, o);
 }
-function drawHorns(ctx, c, si, outline) {
-  const s = si === 1 ? 0.55 : 1;
-  const horns = [[430, 100, -50, -42, -18], [458, 94, -28, -50, -6]];
-  for (const [x, y, hx, hy, bend] of horns) {
-    ctx.beginPath();
-    ctx.moveTo(x - 12, y + 6);
-    ctx.quadraticCurveTo(x + hx * s * 0.4 + bend, y + hy * s * 0.6, x + hx * s, y + hy * s);
-    ctx.quadraticCurveTo(x + hx * s * 0.3, y + hy * s * 0.3 + 8, x + 12, y + 4);
-    ctx.closePath();
-    if (outline) { ctx.stroke(); } else { ctx.fillStyle = c.horn; ctx.fill(); }
-  }
-}
-function drawSpikes(ctx, c, outline) {
-  const pts = [[230, 226], [262, 214], [296, 210], [330, 214], [362, 196], [384, 168]];
-  for (const [x, y] of pts) {
-    ctx.beginPath(); ctx.moveTo(x - 13, y + 8); ctx.lineTo(x - 2, y - 22); ctx.lineTo(x + 13, y + 6); ctx.closePath();
-    if (outline) ctx.stroke(); else { ctx.fillStyle = c.hornDark; ctx.fill(); }
-  }
-}
 function drawFace(ctx, d, c, o) {
-  const [ex, ey] = EYE;
   const sad = d.hunger < 25 || d.joy < 25;
-  ctx.lineCap = 'round';
-  if (o.happy || o.blink > 0.5) {
-    ctx.strokeStyle = c.outline; ctx.lineWidth = 6;
-    ctx.beginPath();
-    if (o.happy) ctx.arc(ex, ey + 6, 12, Math.PI * 1.1, Math.PI * 1.9);
-    else { ctx.moveTo(ex - 13, ey + 2); ctx.lineTo(ex + 13, ey + 2); }
-    ctx.stroke();
-  } else {
-    ctx.fillStyle = '#fffaf0'; ctx.strokeStyle = c.outline; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.ellipse(ex, ey, 17, 20, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = c.eye; ctx.beginPath(); ctx.ellipse(ex + 4 + o.look, ey + 2, 11, 14, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#16101f'; ctx.beginPath(); ctx.ellipse(ex + 5 + o.look, ey + 3, 4, 10, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex + 9 + o.look, ey - 5, 4, 0, Math.PI * 2); ctx.fill();
-    if (sad) { ctx.strokeStyle = c.outline; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(ex - 18, ey - 26); ctx.lineTo(ex + 14, ey - 18); ctx.stroke(); }
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const [ex, ey] of EYES) {
+    if (o.happy || o.blink > 0.5) {
+      ctx.strokeStyle = c.eye; ctx.lineWidth = 5;
+      ctx.beginPath();
+      if (o.happy) ctx.arc(ex, ey + 6, 11, Math.PI * 1.15, Math.PI * 1.85);
+      else { ctx.moveTo(ex - 12, ey + 2); ctx.quadraticCurveTo(ex, ey + 8, ex + 12, ey + 2); }
+      ctx.stroke();
+    } else {
+      const lx = ex + o.look;
+      ctx.fillStyle = c.eye; ctx.beginPath(); ctx.ellipse(lx, ey, 14, 16, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = c.eyeRing; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(lx, ey + 2, 9, 10, 0, 0.2, Math.PI - 0.2); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(lx + 4, ey - 6, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(lx - 5, ey + 6, 2.2, 0, Math.PI * 2); ctx.fill();
+      if (sad) { ctx.strokeStyle = c.outline; ctx.lineWidth = 3.5; const s = ex < 300 ? 1 : -1; ctx.beginPath(); ctx.moveTo(ex - 14 * s, ey - 22); ctx.lineTo(ex + 10 * s, ey - 28); ctx.stroke(); }
+    }
   }
   // blush
-  ctx.fillStyle = 'rgba(255,120,140,0.35)'; ctx.beginPath(); ctx.ellipse(498, 172, 14, 8, 0, 0, Math.PI * 2); ctx.fill();
-  // nostril
-  ctx.fillStyle = c.outline; ctx.beginPath(); ctx.ellipse(543, 150, 4, 3, 0.4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,130,150,0.38)';
+  ctx.beginPath(); ctx.ellipse(234, 190, 15, 8, 0, 0, Math.PI * 2); ctx.ellipse(366, 190, 15, 8, 0, 0, Math.PI * 2); ctx.fill();
+  // nose
+  ctx.fillStyle = c.outline;
+  ctx.beginPath(); ctx.ellipse(290, 194, 3.5, 2.5, 0.4, 0, Math.PI * 2); ctx.ellipse(310, 194, 3.5, 2.5, -0.4, 0, Math.PI * 2); ctx.fill();
   // mouth
-  ctx.strokeStyle = c.outline; ctx.lineWidth = 4;
+  ctx.strokeStyle = c.outline; ctx.lineWidth = 3;
   if (o.mouth > 0.05) {
-    ctx.fillStyle = '#5a1f2c';
-    ctx.beginPath(); ctx.moveTo(512, 184); ctx.quadraticCurveTo(536, 184 + o.mouth * 26, 558, 180); ctx.lineTo(512, 184); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#7a3546';
+    ctx.beginPath(); ctx.ellipse(300, 212, 9, 4 + o.mouth * 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  } else if (sad) {
+    ctx.beginPath(); ctx.moveTo(288, 215); ctx.quadraticCurveTo(300, 206, 312, 215); ctx.stroke();
   } else {
-    ctx.beginPath(); ctx.moveTo(510, 186);
-    const curve = sad ? -7 : (d.joy > 55 ? 9 : 2);
-    ctx.quadraticCurveTo(530, 186 + curve, 552, 181); ctx.stroke();
-    ctx.fillStyle = '#fffaf0'; ctx.beginPath(); ctx.moveTo(530, 187 + curve * 0.4); ctx.lineTo(534, 196 + curve * 0.4); ctx.lineTo(538, 187 + curve * 0.3); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(284, 207); ctx.quadraticCurveTo(292, 216, 300, 208); ctx.quadraticCurveTo(308, 216, 316, 207); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = c.outline; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(305, 211); ctx.lineTo(308, 219); ctx.lineTo(311, 211); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
 }
 function drawAccessories(ctx, d, c, o) {
   const a = d.acc || {};
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   if (a.scarf) {
-    ctx.fillStyle = '#d94b4b'; ctx.strokeStyle = '#6e1f26'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(352, 222); ctx.quadraticCurveTo(400, 250, 454, 206); ctx.lineTo(462, 226); ctx.quadraticCurveTo(402, 276, 346, 244); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(370, 244); ctx.lineTo(352, 300); ctx.lineTo(376, 298); ctx.lineTo(388, 250); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(360, 232); ctx.quadraticCurveTo(402, 258, 456, 214); ctx.stroke();
+    ctx.fillStyle = '#e46a7a'; ctx.strokeStyle = '#7a2a3a'; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(222, 214); ctx.quadraticCurveTo(300, 262, 378, 214); ctx.lineTo(380, 236); ctx.quadraticCurveTo(300, 284, 220, 236); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(330, 248); ctx.lineTo(346, 318); ctx.lineTo(370, 310); ctx.lineTo(352, 240); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#f7d77a'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(226, 226); ctx.quadraticCurveTo(300, 272, 376, 226); ctx.stroke();
   }
   if (a.bow) {
-    ctx.save(); ctx.translate(98, 262); ctx.rotate(-0.5);
-    ctx.fillStyle = '#ef6f8e'; ctx.strokeStyle = '#7a2440'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-28, -18); ctx.lineTo(-28, 18); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(28, -18); ctx.lineTo(28, 18); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.save(); ctx.translate(548, 392); ctx.rotate(-0.3);
+    ctx.fillStyle = '#ef8fa8'; ctx.strokeStyle = '#7a2440'; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-24, -15); ctx.lineTo(-24, 15); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(24, -15); ctx.lineTo(24, 15); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.restore();
   }
   if (a.flower) {
-    ctx.save(); ctx.translate(414, 116);
+    ctx.save(); ctx.translate(226, 120);
     for (let i = 0; i < 5; i++) {
-      ctx.rotate(Math.PI * 2 / 5); ctx.fillStyle = '#f7f1ff'; ctx.strokeStyle = '#8a6fb8'; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.ellipse(0, -13, 8, 13, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.rotate(Math.PI * 2 / 5); ctx.fillStyle = '#fffaf2'; ctx.strokeStyle = '#b07aa8'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.ellipse(0, -12, 7, 12, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
-    ctx.fillStyle = '#f2c14e'; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f2c14e'; ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
   if (a.glasses) {
-    ctx.strokeStyle = '#2a1b0e'; ctx.lineWidth = 5; ctx.fillStyle = 'rgba(180,220,255,0.25)';
-    ctx.beginPath(); ctx.arc(EYE[0] + 2, EYE[1] + 2, 25, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(EYE[0] + 27, EYE[1] - 2); ctx.lineTo(EYE[0] + 46, EYE[1] - 4); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(EYE[0] - 22, EYE[1] - 8); ctx.lineTo(EYE[0] - 54, EYE[1] - 10); ctx.stroke();
+    ctx.strokeStyle = '#3a2440'; ctx.lineWidth = 4; ctx.fillStyle = 'rgba(200,230,255,0.25)';
+    for (const [ex, ey] of EYES) { ctx.beginPath(); ctx.arc(ex, ey + 1, 23, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(285, 158); ctx.quadraticCurveTo(300, 150, 315, 158); ctx.stroke();
   }
   if (a.crown) {
-    ctx.save(); ctx.translate(472, 92); ctx.rotate(0.15);
-    ctx.fillStyle = '#f2c14e'; ctx.strokeStyle = '#7a5410'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(-30, 8); ctx.lineTo(-34, -28); ctx.lineTo(-16, -10); ctx.lineTo(0, -36); ctx.lineTo(16, -10); ctx.lineTo(34, -28); ctx.lineTo(30, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#e8473b'; ctx.beginPath(); ctx.arc(0, -6, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#3f7fd9'; ctx.beginPath(); ctx.arc(-18, 0, 4, 0, Math.PI * 2); ctx.arc(18, 0, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.translate(300, 92);
+    ctx.fillStyle = '#f2c14e'; ctx.strokeStyle = '#7a5410'; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(-26, 8); ctx.lineTo(-30, -24); ctx.lineTo(-14, -8); ctx.lineTo(0, -30); ctx.lineTo(14, -8); ctx.lineTo(30, -24); ctx.lineTo(26, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#e46a7a'; ctx.beginPath(); ctx.arc(0, -4, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#7fb6e8'; ctx.beginPath(); ctx.arc(-15, 1, 3.5, 0, Math.PI * 2); ctx.arc(15, 1, 3.5, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
   if (a.hat) {
-    ctx.save(); ctx.translate(478, 92); ctx.rotate(0.12);
-    ctx.fillStyle = '#4b3a8c'; ctx.strokeStyle = '#1e1640'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.ellipse(0, 4, 54, 12, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-32, 2); ctx.quadraticCurveTo(-10, -60, 26, -96); ctx.quadraticCurveTo(14, -50, 32, 2); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#f2c14e';
-    star(ctx, -4, -30, 8, 4); ctx.fill(); star(ctx, 14, -60, 5, 2.5); ctx.fill();
+    ctx.save(); ctx.translate(300, 96);
+    ctx.fillStyle = '#7d6cc4'; ctx.strokeStyle = '#2e2458'; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.ellipse(0, 4, 50, 11, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-30, 2); ctx.quadraticCurveTo(-8, -56, 22, -88); ctx.quadraticCurveTo(12, -46, 30, 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#f7d77a';
+    star(ctx, -4, -28, 8, 4); ctx.fill(); star(ctx, 12, -56, 5, 2.5); ctx.fill();
     ctx.restore();
   }
 }
@@ -585,21 +668,18 @@ function renderEgg(ctx, d, o) {
   const c = colors(d);
   ctx.save();
   ctx.translate(300, 410); ctx.rotate(o.wobble); ctx.translate(-300, -410);
-  ctx.strokeStyle = c.outline; ctx.lineWidth = 12; ctx.stroke(EGG);
+  ctx.strokeStyle = c.outline; ctx.lineWidth = 8; ctx.stroke(EGG);
   ctx.fillStyle = c.body; ctx.fill(EGG);
   ctx.save(); ctx.clip(EGG);
-  // spots (deterministic from hue)
   let seed = d.hue * 7 + 3;
   const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
-  ctx.fillStyle = c.belly;
+  ctx.fillStyle = c.fluff;
   for (let i = 0; i < 9; i++) { ctx.beginPath(); ctx.ellipse(210 + rnd() * 180, 160 + rnd() * 250, 10 + rnd() * 18, 8 + rnd() * 14, rnd() * 3, 0, Math.PI * 2); ctx.fill(); }
   const g = ctx.createRadialGradient(260, 220, 10, 280, 260, 200);
-  g.addColorStop(0, 'rgba(255,255,255,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0.25)');
+  g.addColorStop(0, 'rgba(255,255,255,0.45)'); g.addColorStop(1, 'rgba(60,30,90,0.2)');
   ctx.fillStyle = g; ctx.fillRect(190, 130, 220, 300);
-  // warm glow from inside
-  ctx.fillStyle = `rgba(255,170,80,${d.warmth / 300})`; ctx.fillRect(190, 130, 220, 300);
-  // cracks
-  ctx.strokeStyle = c.outline; ctx.lineWidth = 5; ctx.lineJoin = 'miter';
+  ctx.fillStyle = `rgba(255,190,120,${d.warmth / 320})`; ctx.fillRect(190, 130, 220, 300);
+  ctx.strokeStyle = c.outline; ctx.lineWidth = 4; ctx.lineJoin = 'miter';
   if (d.warmth > 33) { ctx.beginPath(); ctx.moveTo(250, 230); ctx.lineTo(272, 250); ctx.lineTo(262, 272); ctx.lineTo(286, 290); ctx.stroke(); }
   if (d.warmth > 66) { ctx.beginPath(); ctx.moveTo(352, 210); ctx.lineTo(334, 236); ctx.lineTo(350, 256); ctx.lineTo(328, 284); ctx.lineTo(340, 300); ctx.stroke(); }
   if (d.warmth > 88) { ctx.beginPath(); ctx.moveTo(286, 290); ctx.lineTo(306, 280); ctx.lineTo(328, 284); ctx.stroke(); }
@@ -660,7 +740,7 @@ function dragonTransform() {
   const s = fit * st;
   // keep feet on the nest: local y=436 sits at a fixed screen line
   const groundY = mode === 'paint' ? view.h / 2 + (436 - H / 2) * fit : view.h - 46 - (view.h - 40) * 0.04;
-  const ox = view.w / 2 - (cur.hatched ? 310 : 300) * s;
+  const ox = view.w / 2 - 300 * s;
   const oy = groundY - 436 * s;
   return { s, ox, oy };
 }
@@ -669,23 +749,22 @@ function toScreen(x, y) { const t = view.tf; return [t.ox + x * t.s, t.oy + y * 
 
 function drawBackground(ctx, w, h, t) {
   const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#231c45'); g.addColorStop(0.55, '#4a3570'); g.addColorStop(0.85, '#a0567a'); g.addColorStop(1, '#e08a6a');
+  g.addColorStop(0, '#ddd3f3'); g.addColorStop(0.6, '#f3e3f0'); g.addColorStop(1, '#fbeee6');
   ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-  for (const [x, y, r, ph] of sky.stars) {
-    ctx.fillStyle = `rgba(255,244,220,${0.4 + 0.4 * Math.sin(t * 1.3 + ph)})`;
-    ctx.beginPath(); ctx.arc(x * w, y * h, r, 0, Math.PI * 2); ctx.fill();
+  // soft clouds
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  for (const [x, y, r] of [[0.12, 0.18, 0.07], [0.2, 0.2, 0.05], [0.78, 0.12, 0.06], [0.86, 0.15, 0.045], [0.6, 0.3, 0.035]]) {
+    ctx.beginPath(); ctx.ellipse(x * w, y * h, r * Math.max(w, h), r * Math.max(w, h) * 0.45, 0, 0, Math.PI * 2); ctx.fill();
   }
-  // moon
-  ctx.fillStyle = 'rgba(255,240,210,0.9)'; ctx.beginPath(); ctx.arc(w * 0.84, h * 0.16, Math.min(w, h) * 0.06, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#2f2550'; ctx.beginPath(); ctx.arc(w * 0.84 + Math.min(w, h) * 0.025, h * 0.16 - Math.min(w, h) * 0.012, Math.min(w, h) * 0.055, 0, Math.PI * 2); ctx.fill();
-  // mountains
-  ctx.fillStyle = '#3a2a5c';
-  ctx.beginPath(); ctx.moveTo(0, h * 0.78);
-  const peaks = [[0.12, 0.52], [0.26, 0.7], [0.4, 0.5], [0.55, 0.68], [0.72, 0.46], [0.88, 0.66], [1, 0.56]];
-  for (const [x, y] of peaks) ctx.lineTo(x * w, y * h);
-  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.fill();
-  ctx.fillStyle = '#2b1f47';
-  ctx.beginPath(); ctx.moveTo(0, h * 0.86); ctx.quadraticCurveTo(w * 0.3, h * 0.76, w * 0.6, h * 0.84); ctx.quadraticCurveTo(w * 0.85, h * 0.9, w, h * 0.8); ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.fill();
+  for (const [x, y, r, ph] of sky.stars) {
+    ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.45 * Math.sin(t * 1.3 + ph)})`;
+    star(ctx, x * w, y * h * 1.2, r * 2.2, r * 0.6, 4); ctx.fill();
+  }
+  // gentle hills
+  ctx.fillStyle = '#e9d6ec';
+  ctx.beginPath(); ctx.moveTo(0, h * 0.8); ctx.quadraticCurveTo(w * 0.25, h * 0.66, w * 0.5, h * 0.76); ctx.quadraticCurveTo(w * 0.78, h * 0.86, w, h * 0.72); ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.fill();
+  ctx.fillStyle = '#f6e6ef';
+  ctx.beginPath(); ctx.moveTo(0, h * 0.88); ctx.quadraticCurveTo(w * 0.4, h * 0.8, w * 0.7, h * 0.86); ctx.quadraticCurveTo(w * 0.9, h * 0.9, w, h * 0.86); ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.fill();
 }
 function drawNest(ctx, cx, cy, s) {
   ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s);
@@ -753,7 +832,22 @@ function frame(now) {
   drawBackground(ctx, view.w, view.h, anim.t);
   view.tf = dragonTransform();
   const t = view.tf;
-  if (mode !== 'paint') drawNest(ctx, t.ox + (cur.hatched ? 310 : 300) * t.s, t.oy + 438 * t.s, Math.max(t.s, 0.5) * (cur.hatched ? 1 : 0.7));
+  if (mode !== 'paint') {
+    const gx = t.ox + 300 * t.s, gy = t.oy + 438 * t.s;
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(gx, t.oy + 250 * t.s, 230 * t.s, 0, Math.PI * 2); ctx.stroke();
+    if (cur.hatched) { ctx.fillStyle = 'rgba(90,60,120,0.28)'; ctx.beginPath(); ctx.ellipse(gx, gy + 2, 200 * t.s, 22 * t.s, 0, 0, Math.PI * 2); ctx.fill(); }
+    else drawNest(ctx, gx, gy, Math.max(t.s, 0.5) * 0.7);
+  }
+  // ambient sparkles and hearts, like a happy pastel sketch
+  if (cur.hatched && mode !== 'paint' && Math.random() < dt * 2.2) {
+    const [sx, sy] = toScreen(120 + Math.random() * 360, 60 + Math.random() * 360);
+    emit({ type: 'spark', x: sx, y: sy, vy: -8, life: 1.2, max: 1.2, size: 4 + Math.random() * 4, color: '#ffffff' });
+  }
+  if (cur.hatched && mode !== 'paint' && cur.joy > 70 && Math.random() < dt * 0.35) {
+    const [hx, hy] = toScreen(300 + (Math.random() - 0.5) * 120, 40);
+    emit({ type: 'heart', x: hx, y: hy, vy: -18, life: 2, max: 2, size: 7, color: '#ef6f8e' });
+  }
 
   // blink
   anim.nextBlink -= dt;
@@ -769,13 +863,13 @@ function frame(now) {
   ctx.save();
   if (mode !== 'paint') {
     const breathe = Math.sin(anim.t * 2) * 0.012;
-    const bx = t.ox + 310 * t.s, by = t.oy + 436 * t.s;
+    const bx = t.ox + 300 * t.s, by = t.oy + 436 * t.s;
     ctx.translate(bx, by); ctx.scale(1 - breathe * 0.5, 1 + breathe); ctx.translate(-bx, -by);
   }
   ctx.translate(t.ox, t.oy); ctx.scale(t.s, t.s);
   if (cur.hatched) {
     const refusing = now < anim.refuseUntil;
-    if (refusing) { ctx.translate(310, 300); ctx.rotate(Math.sin(anim.t * 30) * 0.03); ctx.translate(-310, -300); }
+    if (refusing) { ctx.translate(300, 300); ctx.rotate(Math.sin(anim.t * 30) * 0.03); ctx.translate(-300, -300); }
     renderDragon(ctx, cur, {
       flap: anim.flap, blink: anim.blink > 0 ? 1 : 0, happy: now < anim.petUntil, mouth: anim.mouthOpen,
       look: mode === 'paint' ? 0 : Math.sin(anim.t * 0.5) * 2,
@@ -788,12 +882,12 @@ function frame(now) {
   // fire breath
   if (now < anim.fireUntil) {
     const [mx, my] = toScreen(MOUTH[0], MOUTH[1]);
-    for (let i = 0; i < 3; i++) emit({ type: 'fire', x: mx, y: my, vx: (180 + Math.random() * 180) * t.s * 1.4, vy: (Math.random() - 0.6) * 90 * t.s, life: 0.6, max: 0.6, size: 9 * t.s + 4 });
+    for (let i = 0; i < 3; i++) { const side = Math.random() < 0.5 ? -1 : 1, a = 0.1 + Math.random() * 0.5, sp = (260 + Math.random() * 200) * t.s * 1.3; emit({ type: 'fire', x: mx + side * 20 * t.s, y: my, vx: side * Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.5, life: 0.55, max: 0.55, size: 7 * t.s + 3 }); }
   }
   // flying food
   for (let i = flying.length - 1; i >= 0; i--) {
     const f = flying[i]; f.k += dt / 0.65;
-    const [mx, my] = toScreen(MOUTH[0] - 20, MOUTH[1]);
+    const [mx, my] = toScreen(MOUTH[0], MOUTH[1]);
     const k = Math.min(1, f.k), x = f.x0 + (mx - f.x0) * k, y = f.y0 + (my - f.y0) * k - Math.sin(k * Math.PI) * 120;
     if (k > 0.75) anim.mouthOpen = 1;
     if (k >= 1) { flying.splice(i, 1); f.done(); continue; }
@@ -829,7 +923,7 @@ function gainXp(n) {
     if (got.length) msg += ' New: ' + got.join(', ');
     toast(msg, 4200);
     anim.flapUntil = performance.now() + 1800;
-    const [cx, cy] = toScreen(320, 200);
+    const [cx, cy] = toScreen(300, 200);
     for (let i = 0; i < 40; i++) emit({ type: 'spark', x: cx, y: cy, vx: (Math.random() - 0.5) * 500, vy: (Math.random() - 0.8) * 400, g: 300, life: 1.4, max: 1.4, size: 6 + Math.random() * 6, color: Math.random() > 0.5 ? '#f2c14e' : '#fff3d0' });
   }
   updateHeader();
@@ -871,7 +965,7 @@ function feed(food, btn) {
   flying.push({
     id: food.id, k: 0, x0: Math.min(view.w - 30, Math.max(30, r.left + r.width / 2 - cr.left)), y0: view.h - 10,
     done: () => {
-      const [mx, my] = toScreen(MOUTH[0] - 10, MOUTH[1]);
+      const [mx, my] = toScreen(MOUTH[0], MOUTH[1]);
       for (let i = 0; i < 10; i++) emit({ x: mx, y: my, vx: (Math.random() - 0.3) * 160, vy: -Math.random() * 120, g: 500, life: 0.7, max: 0.7, size: 3, color: '#f6ecd9' });
       emit({ type: 'text', x: mx, y: my - 50, vy: -40, life: 1, max: 1, size: 20, text: 'nom!', color: '#fff3d0' });
       const wasHungry = cur.hunger < 60;
