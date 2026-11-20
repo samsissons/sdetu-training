@@ -240,6 +240,7 @@ table.st{width:100%;border-collapse:collapse;font-size:14px}
   <div class="inner" id="tabs">
     <button class="tab" data-view="board">Live board</button>
     <button class="tab" data-view="score">Enter scores</button>
+    <button class="tab" data-view="cards">Scorecards</button>
     <button class="tab" data-view="trip">Trip standings</button>
     <button class="tab" data-view="formats">Formats</button>
     <button class="tab" data-view="setup" id="setupTab">Setup</button>
@@ -591,6 +592,37 @@ function viewBoard() {
   </div>`;
 }
 
+function cardBlock(r, x, c, showRound) {
+  const t = scoreTile(r, x); const f = fmt(r);
+  const sub = showRound ? `${esc(r.name)} · ${esc(r.course || 'Course TBC')} · ${esc(f.name)}`
+    : (f.team ? esc(x.unit.members.map(firstName).join(' · ')) : `hcp ${x.unit.hcp}`);
+  return `<section class="panel stack" style="gap:12px">
+    <div class="spread" style="align-items:center">
+      <div class="row" style="gap:12px;flex-wrap:nowrap;min-width:0"><span class="pos num">${x.pos == null ? '–' : (x.tied ? 'T' : '') + x.pos}</span>
+        <div class="who"><b>${esc(showRound ? r.name + ' · ' + (r.course || '') : x.unit.name)}</b><small>${showRound ? `${esc(f.name)} · ${esc(x.unit.name)}` : sub}</small></div></div>
+      <div class="row" style="gap:10px;flex-wrap:nowrap"><span class="thru num">${x.thru === 18 ? 'F' : x.thru ? 'Thru ' + x.thru : 'Not started'}</span><span class="tile num ${t.cls}" style="min-width:70px">${esc(t.text)}<small>${esc(t.label)}</small></span></div>
+    </div>
+    ${scorecard(r, x, c)}
+  </section>`;
+}
+function viewCards() {
+  const rs = sortedRounds(); if (!rs.length) return welcome();
+  const who = S.cardPlayer && S.players[S.cardPlayer] ? S.cardPlayer : '';
+  const picker = `<div class="field" style="max-width:260px"><label for="cardWho">Show</label><select class="inp" id="cardWho">
+    <option value="">Everyone, one round at a time</option>${sortedPlayers().map(p => `<option value="${p.id}" ${p.id === who ? 'selected' : ''}>${esc(p.name)}: all rounds</option>`).join('')}</select></div>`;
+  let body;
+  if (who) {
+    body = rs.map(r => { const c = compute(r); const x = c.rows.find(x => x.unit.members.includes(who)); return x ? cardBlock(r, x, c, true) : ''; }).join('')
+      || `<div class="empty panel">${esc(pname(who))} isn't in any rounds yet.</div>`;
+  } else {
+    S.cardRound = pickRound(S.cardRound); const r = S.rounds[S.cardRound]; const c = compute(r);
+    body = roundChips(r.id, 'cardRound') + (c.rows.map(x => cardBlock(r, x, c, false)).join('') || '<div class="empty panel">Nobody is in this round yet.</div>');
+  }
+  return `<div class="stack">${demoBanner()}
+    <div class="spread"><div><h2>Scorecards</h2><div class="sub">Hole-by-hole cards, updated live. Circles are under par, squares over.</div></div>${picker}</div>
+    ${body}</div>`;
+}
+
 function mark(g, par) {
   if (g == null) return '';
   if (g === 'P') return '<span class="mk pu">–</span>';
@@ -612,6 +644,7 @@ function scorecard(r, x, c) {
     rows.push(line('Best pts', h => { const o = x.holes[h]; return { html: o ? `<b>${o.best}</b>` : '', v: o ? o.best : undefined }; }));
   } else {
     rows.push(line(f.teamScore ? 'Team gross' : 'Gross', h => { const o = x.holes[h]; return { html: o ? mark(o.g, o.par) : '', v: o && typeof o.g === 'number' ? o.g : undefined }; }));
+    if (r.format === 'stroke' || r.format === 'ambrose') rows.push(line('Nett', h => { const o = x.holes[h]; return { html: o && o.nett !== Infinity ? o.nett : '', v: o && o.nett !== Infinity ? o.nett : undefined }; }));
     if (r.format === 'stableford' || r.format === 'skins') rows.push(line('Points', h => { const o = x.holes[h]; return { html: o ? o.p : '', v: o ? o.p : undefined }; }));
     if (r.format === 'skins') rows.push(line('Skins', h => { const w = c.skinHoles[h]; return { html: w && w.id === x.unit.id ? `<span class="skin">${w.n}</span>` : '' }; }, false));
   }
@@ -813,7 +846,7 @@ function render() {
   let selStart = null; try { selStart = focusId ? ae.selectionStart : null; } catch (e) {}
   const dirty = {}; main.querySelectorAll('[data-dirty]').forEach(el => { if (el.id) dirty[el.id] = el.value; });
   const scrollY = window.scrollY;
-  const views = { board: viewBoard, score: viewScore, trip: viewTrip, formats: viewFormats, setup: viewSetup };
+  const views = { board: viewBoard, score: viewScore, cards: viewCards, trip: viewTrip, formats: viewFormats, setup: viewSetup };
   main.innerHTML = (views[S.view] || viewBoard)();
   for (const id in dirty) { const el = document.getElementById(id); if (el) { el.value = dirty[id]; el.dataset.dirty = '1'; } }
   if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus({ preventScroll: true }); try { if (selStart != null) el.setSelectionRange(selStart, selStart); } catch (e) {} } }
@@ -821,7 +854,7 @@ function render() {
 }
 
 /* ---------- routing ---------- */
-const VIEWS = ['board', 'score', 'trip', 'formats', 'setup'];
+const VIEWS = ['board', 'score', 'cards', 'trip', 'formats', 'setup'];
 function route() { const h = location.hash.slice(1); S.view = VIEWS.includes(h) ? h : 'board'; }
 function go(v) { if (location.hash.slice(1) !== v) location.hash = v; else { S.view = v; render(); } window.scrollTo(0, 0); }
 window.addEventListener('hashchange', () => { route(); render(); });
@@ -834,6 +867,7 @@ document.addEventListener('click', e => {
   const r = S.rounds[S.view === 'setup' ? id : S.scoreRound];
   switch (act) {
     case 'boardRound': S.boardRound = id; render(); break;
+    case 'cardRound': S.cardRound = id; render(); break;
     case 'scoreRound': S.scoreRound = id; S.pickOpen = false; render(); break;
     case 'toggle': S.open[id] = !S.open[id]; render(); break;
     case 'demo': startDemo(); break;
@@ -887,6 +921,7 @@ function currentHole(r) { return S.hole[r.id] || 1; }
 
 document.addEventListener('input', e => { if (e.target.dataset.save) e.target.dataset.dirty = '1'; });
 document.addEventListener('change', e => {
+  if (e.target.id === 'cardWho') { S.cardPlayer = e.target.value; render(); return; }
   const el = e.target; const k = el.dataset.save; if (!k) return;
   delete el.dataset.dirty;
   const id = el.dataset.id; const r = S.rounds[id];
