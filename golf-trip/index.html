@@ -1,0 +1,926 @@
+<title>Golf Trip Leaderboard</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a hand-operated tournament leaderboard. Green header band, white slotted board,
+   red numbers for under par. One column on phones, wider board on desktop. */
+:root{
+  --bg:#e8eee5; --surface:#fbfcf8; --ink:#11241a; --muted:#56695d; --line:#d0dacc;
+  --green:#134e36; --green-2:#1e6b4b; --on-green:#f4f8f2; --red:#c41230; --flag:#e3a514;
+  --tile:#ffffff; --tile-line:#c6d1c2; --chip:#dce5d8; --good:#1e6b4b;
+  --shadow:0 1px 0 rgba(17,36,26,.06), 0 8px 24px -12px rgba(17,36,26,.25);
+  --f-display:"Big Shoulders Display","Oswald","Arial Narrow",Impact,sans-serif;
+  --f-body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#08130d; --surface:#0f1f17; --ink:#e5eee7; --muted:#8ea396; --line:#1f3529;
+  --green:#0e3926; --green-2:#2f8a62; --on-green:#eef6f0; --red:#ff5d6e; --flag:#f3c04a;
+  --tile:#142a1f; --tile-line:#25412f; --chip:#1a3226; --good:#4cc58e;
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#08130d; --surface:#0f1f17; --ink:#e5eee7; --muted:#8ea396; --line:#1f3529;
+  --green:#0e3926; --green-2:#2f8a62; --on-green:#eef6f0; --red:#ff5d6e; --flag:#f3c04a;
+  --tile:#142a1f; --tile-line:#25412f; --chip:#1a3226; --good:#4cc58e;
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--green)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.inner{max-width:1000px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* Header band */
+.hero{background:var(--green);color:var(--on-green);margin-top:calc(-1 * env(safe-area-inset-top,0px));padding-top:calc(env(safe-area-inset-top,0px) + 22px);position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 38px,transparent 38px 76px)}
+.hero .inner{position:relative;z-index:1;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-block:0 18px}
+.eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;opacity:.8;display:flex;align-items:center;gap:8px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--flag);box-shadow:0 0 0 0 var(--flag);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(243,192,74,.6)}70%{box-shadow:0 0 0 8px rgba(243,192,74,0)}100%{box-shadow:0 0 0 0 rgba(243,192,74,0)}}
+h1{font-family:var(--f-display);font-weight:900;text-transform:uppercase;font-size:clamp(40px,9vw,76px);line-height:.88;letter-spacing:.01em;margin:6px 0 0;text-wrap:balance}
+.flag{display:inline-block;width:.42em;height:.62em;margin-left:.12em;vertical-align:.04em;position:relative}
+.flag::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--on-green)}
+.flag::after{content:"";position:absolute;left:3px;top:0;border-left:.36em solid var(--flag);border-top:.14em solid transparent;border-bottom:.14em solid transparent}
+.hero-meta{font-size:13px;opacity:.85;text-align:right}
+.hero-meta b{font-family:var(--f-display);font-size:28px;display:block;line-height:1;opacity:1;font-weight:800}
+
+/* Tabs */
+.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--green);border-top:1px solid rgba(255,255,255,.1);box-shadow:0 6px 18px -12px rgba(0,0,0,.5)}
+.tabs .inner{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.tab{appearance:none;border:0;background:none;color:var(--on-green);opacity:.7;padding:12px 14px 11px;font-family:var(--f-display);font-weight:800;font-size:18px;letter-spacing:.06em;text-transform:uppercase;border-bottom:3px solid transparent;white-space:nowrap}
+.tab[aria-current="page"]{opacity:1;border-bottom-color:var(--flag)}
+.tab:hover{opacity:1}
+
+main{padding-block:20px 80px}
+.stack{display:flex;flex-direction:column;gap:18px}
+.banner{background:var(--flag);color:#1d1704;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.banner button{border:1.5px solid #1d1704;background:transparent;border-radius:999px;padding:4px 12px;font-weight:700;font-size:12px}
+
+h2{font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-size:26px;letter-spacing:.02em;margin:0;line-height:1}
+h3{font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-size:19px;letter-spacing:.03em;margin:0}
+.sub{color:var(--muted);font-size:13px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spread{display:flex;gap:12px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap}
+
+/* Round chips */
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.chip{flex:0 0 auto;border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 12px;text-align:left;min-width:150px}
+.chip b{display:block;font-family:var(--f-display);font-size:17px;text-transform:uppercase;letter-spacing:.03em;font-weight:800}
+.chip span{font-size:12px;color:var(--muted)}
+.chip[aria-pressed="true"]{border-color:var(--green-2);background:var(--green);color:var(--on-green)}
+.chip[aria-pressed="true"] span{color:var(--on-green);opacity:.8}
+.status{display:inline-flex;align-items:center;gap:5px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--chip);color:var(--muted)}
+.status.live{background:var(--red);color:#fff}
+.status.final{background:var(--ink);color:var(--bg)}
+
+/* Leaderboard */
+.board{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;border:1px solid var(--line)}
+.board-top{background:var(--green);color:var(--on-green);padding:12px 16px;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.board-top h3{font-size:22px}
+.board-top .sub{color:var(--on-green);opacity:.8}
+.lb-cols,.lb-row{display:grid;grid-template-columns:44px minmax(0,1fr) 46px 74px;gap:8px;align-items:center;padding:0 12px}
+.lb-cols{font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--muted);padding-block:8px;border-bottom:2px solid var(--line)}
+.lb-cols span:nth-child(3),.lb-cols span:nth-child(4){text-align:center}
+.lb-row{width:100%;border:0;background:none;text-align:left;padding-block:10px;border-bottom:1px solid var(--line)}
+.lb-row:hover{background:color-mix(in srgb,var(--chip) 50%,transparent)}
+.lb-row[aria-expanded="true"]{background:var(--chip)}
+.pos{font-family:var(--f-display);font-weight:800;font-size:22px;text-align:center}
+.who{min-width:0}
+.who b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thru{text-align:center;font-weight:600;color:var(--muted);font-size:13px}
+.tile{font-family:var(--f-display);font-weight:800;font-size:28px;line-height:1;text-align:center;background:var(--tile);border:1.5px solid var(--tile-line);border-radius:6px;padding:6px 0 5px;box-shadow:inset 0 -3px 0 rgba(0,0,0,.06)}
+.tile.under{color:var(--red)}
+.tile.dim{color:var(--muted)}
+.tile small{display:block;font-family:var(--f-body);font-size:9px;letter-spacing:.14em;font-weight:700;color:var(--muted);margin-top:1px}
+.tile.flash{animation:flash 1.4s ease-out}
+@keyframes flash{0%{background:var(--flag)}100%{background:var(--tile)}}
+.lb-card{padding:12px;border-bottom:1px solid var(--line);background:var(--chip)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+
+/* Scorecard grid */
+.sc-wrap{overflow-x:auto;background:var(--surface);border-radius:10px;border:1px solid var(--line)}
+table.sc{border-collapse:collapse;font-size:13px;min-width:100%}
+.sc th,.sc td{padding:5px 4px;text-align:center;min-width:28px;border-right:1px solid var(--line)}
+.sc th:first-child,.sc td:first-child{text-align:left;padding-left:10px;min-width:92px;position:sticky;left:0;background:var(--surface);font-weight:600;white-space:nowrap}
+.sc thead th{font-size:10px;letter-spacing:.1em;color:var(--muted);font-weight:700;border-bottom:1px solid var(--line)}
+.sc .tot{font-weight:800;background:var(--chip)}
+.sc tr.parrow td{color:var(--muted)}
+.mk{display:inline-grid;place-items:center;width:24px;height:24px;font-weight:700;font-variant-numeric:tabular-nums}
+.mk.b1{border:1.5px solid var(--red);border-radius:50%;color:var(--red)}
+.mk.b2{border:1.5px solid var(--red);border-radius:50%;color:var(--red);box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px var(--red)}
+.mk.o1{border:1.5px solid var(--muted)}
+.mk.o2{border:1.5px solid var(--muted);box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px var(--muted)}
+.mk.pu{color:var(--muted)}
+.skin{color:var(--flag);font-weight:900}
+
+/* Score entry */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
+.picker{display:flex;flex-wrap:wrap;gap:8px}
+.pick{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 13px;font-weight:600;font-size:14px}
+.pick[aria-pressed="true"]{background:var(--green);border-color:var(--green);color:var(--on-green)}
+.holes{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:5px}
+.hole-btn{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 0;font-family:var(--f-display);font-weight:800;font-size:17px}
+.hole-btn.done{background:var(--chip);border-color:var(--chip)}
+.hole-btn[aria-current="true"]{background:var(--green);color:var(--on-green);border-color:var(--green)}
+.hole-card{background:var(--green);color:var(--on-green);border-radius:14px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.hole-card .big{font-family:var(--f-display);font-weight:900;font-size:64px;line-height:.85}
+.hole-card .big small{font-size:18px;letter-spacing:.12em;display:block;opacity:.8}
+.hole-facts{display:flex;gap:16px;text-align:center}
+.hole-facts div b{display:block;font-family:var(--f-display);font-size:34px;line-height:1;font-weight:800}
+.hole-facts div span{font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.8;font-weight:700}
+.entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.entry:last-child{border-bottom:0}
+.entry .nm b{display:block;font-weight:700}
+.entry .nm small{color:var(--muted);font-size:12px}
+.dots{display:inline-flex;gap:3px;vertical-align:middle;margin-left:4px}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--flag);display:inline-block}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper button{width:44px;height:48px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);font-size:24px;font-weight:600;line-height:1}
+.stepper .val{width:60px;height:56px;border-radius:10px;border:2px solid var(--green-2);background:var(--tile);font-family:var(--f-display);font-weight:900;font-size:34px;display:grid;place-items:center}
+.stepper .val.under{color:var(--red)}
+.stepper .val.unset{color:var(--muted);border-style:dashed;border-color:var(--line);font-size:16px;font-family:var(--f-body);font-weight:600}
+.stepper .pu{width:auto;padding:0 10px;font-size:13px;font-weight:700}
+.stepper .pu[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.result{font-size:12px;font-weight:700;color:var(--muted);text-align:right;min-height:16px}
+.result.good{color:var(--red)}
+.navrow{display:flex;gap:10px}
+.btn{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 16px;font-weight:700}
+.btn.primary{background:var(--green);border-color:var(--green);color:var(--on-green)}
+.btn.flagb{background:var(--flag);border-color:var(--flag);color:#1d1704}
+.btn.danger{color:var(--red)}
+.btn.sm{padding:6px 10px;font-size:13px;border-radius:8px}
+.navrow .btn{flex:1;padding:14px}
+
+/* Trip standings */
+.podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end}
+.pod{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 10px;text-align:center;box-shadow:var(--shadow);min-width:0}
+.pod .rk{font-family:var(--f-display);font-weight:900;font-size:44px;line-height:.9;color:var(--muted)}
+.pod.p1{background:var(--green);color:var(--on-green);border-color:var(--green);padding-block:22px}
+.pod.p1 .rk{color:var(--flag);font-size:60px}
+.pod b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pod .pts{font-family:var(--f-display);font-weight:800;font-size:24px}
+.p1-wrap{order:2}.p2-wrap{order:1}.p3-wrap{order:3}
+.tbl-wrap{overflow-x:auto}
+table.st{width:100%;border-collapse:collapse;font-size:14px}
+.st th{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-align:center;padding:8px 6px;border-bottom:2px solid var(--line);white-space:nowrap}
+.st td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:center}
+.st th:nth-child(2),.st td:nth-child(2){text-align:left}
+.st td.total{font-family:var(--f-display);font-weight:800;font-size:22px}
+.st td.rk{font-family:var(--f-display);font-weight:800;font-size:19px}
+.st .prov{color:var(--muted);font-style:italic}
+
+/* Setup */
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--muted)}
+.inp{border:1.5px solid var(--line);background:var(--tile);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+.inp:focus{border-color:var(--green-2);outline:none}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.plist{display:flex;flex-direction:column;gap:6px}
+.prow{display:grid;grid-template-columns:minmax(0,1fr) 90px 40px;gap:8px;align-items:center}
+.iconbtn{width:40px;height:38px;border-radius:8px;border:1.5px solid var(--line);background:var(--surface);color:var(--muted);font-size:18px}
+.course{overflow-x:auto}
+.course table{border-collapse:collapse}
+.course td,.course th{padding:2px;text-align:center;font-size:11px;color:var(--muted)}
+.course input{width:38px;text-align:center;padding:5px 2px;border:1.5px solid var(--line);border-radius:6px;background:var(--tile)}
+.course input.bad{border-color:var(--red)}
+.rcard{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}
+.rcard > button{width:100%;border:0;background:none;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left}
+.rbody{padding:0 16px 16px;display:flex;flex-direction:column;gap:16px;border-top:1px solid var(--line);padding-top:16px}
+.fmt-desc{background:var(--chip);border-radius:10px;padding:10px 12px;font-size:13px}
+.teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.team{border:1.5px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.team ul{margin:0;padding:0;list-style:none;font-size:13px}
+.assign{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px 12px}
+.assign label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.assign select{max-width:110px}
+.checks{display:flex;flex-wrap:wrap;gap:6px}
+.checks label{display:flex;align-items:center;gap:6px;border:1.5px solid var(--line);border-radius:999px;padding:4px 10px;font-size:13px}
+
+.toasts{position:fixed;left:0;right:0;bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:8px;z-index:50;pointer-events:none;padding-inline:16px}
+.toast{background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:600;font-size:14px;box-shadow:var(--shadow);animation:tin .3s ease-out}
+.toast.birdie{background:var(--red);color:#fff}
+@keyframes tin{from{transform:translateY(12px);opacity:0}}
+.formats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.formats div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.formats p{margin:6px 0 0;font-size:13px;color:var(--muted)}
+@media (max-width:520px){
+  .lb-cols,.lb-row{grid-template-columns:34px minmax(0,1fr) 38px 62px;padding:0 10px;gap:6px}
+  .tile{font-size:24px}
+  .hole-card .big{font-size:52px}
+  .hole-facts{gap:10px}
+  .hero-meta{text-align:left}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+
+<header class="hero">
+  <div class="inner">
+    <div>
+      <div class="eyebrow"><span class="live-dot" id="liveDot" hidden></span><span id="eyebrow">Golf trip</span></div>
+      <h1 id="tripName">The Leaderboard<span class="flag"></span></h1>
+    </div>
+    <div class="hero-meta" id="heroMeta"></div>
+  </div>
+</header>
+<nav class="tabs" aria-label="Sections">
+  <div class="inner" id="tabs">
+    <button class="tab" data-view="board">Live board</button>
+    <button class="tab" data-view="score">Enter scores</button>
+    <button class="tab" data-view="trip">Trip standings</button>
+    <button class="tab" data-view="formats">Formats</button>
+    <button class="tab" data-view="setup" id="setupTab">Setup</button>
+  </div>
+</nav>
+<main class="inner" id="main"><div class="empty">Loading the board…</div></main>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = p => p + Math.random().toString(36).slice(2, 9);
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+const DEFAULT_PAR = [4,4,3,5,4,4,3,4,5, 4,3,5,4,4,4,3,5,4];
+const DEFAULT_SI  = [7,1,15,11,3,9,17,5,13, 8,16,12,2,6,10,18,14,4];
+const DEFAULT_POINTS = [10,8,6,5,4,3,2,1];
+
+const FORMATS = {
+  stableford: { name: 'Stableford', short: 'Stableford', team: false, allowance: 1, pickup: true, unit: 'pts',
+    desc: 'Individual. Points on every hole against your nett par: 1 for a nett bogey, 2 for nett par, 3 for a nett birdie, 4 for a nett eagle. Pick up once you can\'t score. Most points wins.' },
+  stroke: { name: 'Nett Stroke Play', short: 'Stroke', team: false, allowance: 1, pickup: false, unit: 'nett',
+    desc: 'Individual. Every shot counts and you hole out on every hole. Gross score minus your handicap. Lowest nett score wins.' },
+  ambrose: { name: 'Ambrose', short: 'Ambrose', team: true, teamScore: true, allowance: 1, pickup: false, unit: 'nett',
+    desc: 'Team scramble. Everyone tees off, the team picks the best shot and all play from there, all the way into the hole. One score per team per hole. Team handicap is the combined handicaps divided by twice the team size (pairs ÷ 4, threes ÷ 6, fours ÷ 8).' },
+  fourbbb: { name: 'Best Ball Stableford', short: 'Best Ball', team: true, teamScore: false, allowance: 0.9, pickup: true, unit: 'pts',
+    desc: 'Pairs. Both players play their own ball and score Stableford at 90% of handicap. The better score of the two counts on each hole. Most team points wins.' },
+  skins: { name: 'Skins', short: 'Skins', team: false, allowance: 1, pickup: true, unit: 'skins',
+    desc: 'Individual. Every hole is worth a skin. Win the hole outright on nett score and you take it. Any tie and the skin carries over to the next hole, so they stack up.' },
+};
+
+const S = {
+  mode: 'loading', db: null, user: null, canEdit: false, canWrite: true, demo: false, realEmpty: false,
+  trip: { name: '', points: DEFAULT_POINTS }, players: {}, rounds: {}, scores: {},
+  loaded: {}, view: 'board', boardRound: null, scoreRound: null, open: {}, editRound: null, hole: {},
+  flash: new Set(), real: null,
+};
+
+/* ---------- golf maths ---------- */
+const sortedRounds = () => Object.values(S.rounds).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.date || '').localeCompare(String(b.date || '')) || String(a.name).localeCompare(String(b.name)));
+const pname = pid => S.players[pid]?.name || 'Player';
+const firstName = pid => pname(pid).split(' ')[0];
+const sortedPlayers = () => Object.values(S.players).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+const fmt = r => FORMATS[r?.format] || FORMATS.stableford;
+function course(r) { return { par: Array.isArray(r.par) && r.par.length === 18 ? r.par.map(Number) : DEFAULT_PAR, si: Array.isArray(r.si) && r.si.length === 18 ? r.si.map(Number) : DEFAULT_SI }; }
+function baseH(r, pid) { const o = r.hcp?.[pid]; const v = (o !== undefined && o !== null && o !== '') ? Number(o) : Number(S.players[pid]?.hcp ?? 0); return isFinite(v) ? v : 0; }
+function phcp(r, pid) { return Math.round(baseH(r, pid) * fmt(r).allowance); }
+function ambroseHcp(r, members) { if (!members.length) return 0; return Math.round(members.reduce((s, p) => s + baseH(r, p), 0) / (2 * members.length)); }
+function shots(ph, si) {
+  if (ph >= 0) return Math.floor(ph / 18) + (si <= ph % 18 ? 1 : 0);
+  const a = -ph; return -(Math.floor(a / 18) + ((19 - si) <= a % 18 ? 1 : 0));
+}
+const stbl = (par, g, s) => g === 'P' ? 0 : Math.max(0, 2 + par + s - g);
+const toPar = v => v === 0 ? 'E' : (v > 0 ? '+' + v : String(v));
+function roundPlayers(r) {
+  const f = fmt(r);
+  if (f.team) return [...new Set((r.teams || []).flatMap(t => t.playerIds || []))].filter(id => S.players[id]);
+  const ids = Array.isArray(r.playerIds) && r.playerIds.length ? r.playerIds : sortedPlayers().map(p => p.id);
+  return ids.filter(id => S.players[id]);
+}
+function teamLabel(members, i) { return members.length ? members.map(firstName).join(' & ') : 'Team ' + (i + 1); }
+function units(r) {
+  const f = fmt(r);
+  if (f.team) return (r.teams || []).map((t, i) => {
+    const members = (t.playerIds || []).filter(id => S.players[id]);
+    return { id: t.id, name: t.name || teamLabel(members, i), members, keys: f.teamScore ? [t.id] : members, hcp: f.teamScore ? ambroseHcp(r, members) : null };
+  }).filter(u => u.members.length);
+  return roundPlayers(r).map(pid => ({ id: pid, name: pname(pid), members: [pid], keys: [pid], hcp: phcp(r, pid) }));
+}
+/* entities = who a scorer types a number for */
+function entities(r) {
+  const f = fmt(r);
+  if (f.teamScore) return units(r).map(u => ({ key: u.id, name: u.name, sub: u.members.map(firstName).join(', '), hcp: u.hcp }));
+  const teamOf = {};
+  if (f.team) units(r).forEach(u => u.members.forEach(m => teamOf[m] = u.name));
+  return roundPlayers(r).map(pid => ({ key: pid, name: pname(pid), sub: teamOf[pid] ? 'Team ' + teamOf[pid] : '', hcp: phcp(r, pid) }));
+}
+const docId = (r, key) => r.id + '__' + key;
+function gv(r, key, h) { const v = S.scores[docId(r, key)]?.holes?.[h]; return (v === 'P' || (typeof v === 'number' && v > 0)) ? v : null; }
+
+function compute(r) {
+  const f = fmt(r), C = course(r), us = units(r);
+  const rows = us.map(u => {
+    let thru = 0, pts = 0, rel = 0, gross = 0, holes = [];
+    for (let h = 1; h <= 18; h++) {
+      const par = C.par[h - 1], si = C.si[h - 1];
+      if (r.format === 'fourbbb') {
+        const vals = u.members.map(pid => { const g = gv(r, pid, h); return g == null ? null : { pid, g, p: stbl(par, g, shots(phcp(r, pid), si)) }; });
+        if (vals.length && vals.every(Boolean)) { thru++; const best = Math.max(...vals.map(v => v.p)); pts += best; holes.push({ best, vals }); }
+        else holes.push(null);
+        continue;
+      }
+      const g = gv(r, u.keys[0], h); const s = shots(u.hcp, si);
+      if (g == null) { holes.push(null); continue; }
+      thru++;
+      const p = stbl(par, g, s);
+      if (g !== 'P') { gross += g; rel += (g - s) - par; }
+      pts += p; holes.push({ g, s, p, nett: g === 'P' ? Infinity : g - s, par });
+    }
+    return { unit: u, thru, pts, rel, gross, holes, skins: 0 };
+  });
+  let carry = 0; const skinHoles = {};
+  if (r.format === 'skins' && rows.length > 1) {
+    for (let h = 0; h < 18; h++) {
+      if (!rows.every(x => x.holes[h])) break;
+      const nets = rows.map(x => x.holes[h].nett), min = Math.min(...nets);
+      const winners = rows.filter(x => x.holes[h].nett === min);
+      carry++;
+      if (winners.length === 1 && min !== Infinity) { winners[0].skins += carry; skinHoles[h] = { id: winners[0].unit.id, n: carry }; carry = 0; }
+    }
+  }
+  const val = x => {
+    if (!x.thru) return null;
+    if (r.format === 'stableford' || r.format === 'fourbbb') return -x.pts;
+    if (r.format === 'skins') return -x.skins;
+    return x.rel;
+  };
+  rows.sort((a, b) => {
+    const va = val(a), vb = val(b);
+    if (va == null && vb == null) return a.unit.name.localeCompare(b.unit.name);
+    if (va == null) return 1; if (vb == null) return -1;
+    return va - vb || (r.format === 'skins' ? a.rel - b.rel : 0) || b.thru - a.thru;
+  });
+  rows.forEach(x => { const v = val(x); x.pos = v == null ? null : 1 + rows.filter(y => val(y) != null && val(y) < v).length; });
+  rows.forEach(x => { x.tied = x.pos != null && rows.filter(y => y.pos === x.pos).length > 1; });
+  return { rows, carry, skinHoles, started: rows.some(x => x.thru) };
+}
+
+function scoreTile(r, x) {
+  if (!x.thru) return { text: '–', cls: 'dim', label: fmt(r).unit };
+  if (r.format === 'stableford' || r.format === 'fourbbb') return { text: x.pts, cls: x.pts - 2 * x.thru > 0 ? 'under' : '', label: 'pts' };
+  if (r.format === 'skins') return { text: x.skins, cls: x.skins ? 'under' : '', label: x.skins === 1 ? 'skin' : 'skins' };
+  return { text: toPar(x.rel), cls: x.rel < 0 ? 'under' : '', label: 'nett' };
+}
+
+function tripStandings() {
+  const table = (S.trip.points && S.trip.points.length ? S.trip.points : DEFAULT_POINTS).map(Number);
+  const res = {};
+  sortedPlayers().forEach(p => res[p.id] = { pid: p.id, total: 0, by: {}, sides: 0 });
+  const rounds = sortedRounds();
+  rounds.forEach(r => {
+    const c = compute(r);
+    if (c.started) {
+      const groups = {};
+      c.rows.forEach(x => { if (x.pos != null) (groups[x.pos] ||= []).push(x); });
+      Object.entries(groups).forEach(([pos, xs]) => {
+        const p0 = Number(pos) - 1; let sum = 0;
+        for (let i = 0; i < xs.length; i++) sum += table[p0 + i] || 0;
+        const each = Math.round(sum / xs.length * 10) / 10;
+        xs.forEach(x => x.unit.members.forEach(m => { if (res[m]) { res[m].by[r.id] = each; res[m].total += each; } }));
+      });
+    }
+    (r.sides || []).forEach(sd => { if (sd.winner && res[sd.winner]) { const v = Number(sd.points) || 0; res[sd.winner].sides += v; res[sd.winner].total += v; } });
+  });
+  const list = Object.values(res).map(x => ({ ...x, total: Math.round(x.total * 10) / 10 })).sort((a, b) => b.total - a.total || pname(a.pid).localeCompare(pname(b.pid)));
+  list.forEach(x => x.pos = 1 + list.filter(y => y.total > x.total).length);
+  return { list, rounds };
+}
+
+/* ---------- data layer ---------- */
+const pendingScores = {}; const flushTimers = {}; const docQueue = {};
+function serial(path, fn) { docQueue[path] = (docQueue[path] || Promise.resolve()).then(fn).catch(e => { toast(writeErr(e)); }); return docQueue[path]; }
+function writeErr(e) { return e?.code === 'not_granted' ? 'You can view but not change this trip. Ask the organiser for edit access.' : 'Could not save. Check your connection and try again.'; }
+async function setDoc(path, data) {
+  if (S.demo) { demoApply(path, data, false); return; }
+  return serial(path, () => S.db.doc(path).set(data));
+}
+async function updateDoc(path, data) {
+  if (S.demo) { demoApply(path, data, true); return; }
+  return serial(path, () => S.db.doc(path).update(data));
+}
+async function delDoc(path) {
+  if (S.demo) { const [c, id] = path.split('/'); delete S[c][id]; render(); return; }
+  return serial(path, () => S.db.doc(path).delete());
+}
+function demoApply(path, data, merge) {
+  const [c, id] = path.split('/');
+  if (c === 'trip') { S.trip = merge ? { ...S.trip, ...data } : data; render(); return; }
+  const cur = S[c][id];
+  if (merge && cur) { const n = { ...cur }; for (const k in data) n[k] = (data[k] && typeof data[k] === 'object' && !Array.isArray(data[k]) && cur[k] && typeof cur[k] === 'object') ? { ...cur[k], ...data[k] } : data[k]; S[c][id] = n; }
+  else S[c][id] = { id, ...data };
+  render();
+}
+function setHole(r, key, h, v) {
+  const id = docId(r, key);
+  const cur = S.scores[id] || { id, roundId: r.id, key, holes: {} };
+  S.scores[id] = { ...cur, holes: { ...cur.holes, [h]: v } };
+  if (S.demo) { render(); return; }
+  (pendingScores[id] ||= {})[h] = v;
+  clearTimeout(flushTimers[id]);
+  flushTimers[id] = setTimeout(() => flush(id, r.id, key), 450);
+  render();
+}
+function flush(id, roundId, key) {
+  const holes = pendingScores[id]; delete pendingScores[id]; if (!holes) return;
+  const path = 'scores/' + id;
+  serial(path, async () => {
+    const ref = S.db.doc(path); const snap = await ref.get();
+    if (snap.exists) await ref.update({ holes });
+    else await ref.set({ roundId, key, holes });
+  });
+}
+
+function subscribe(timer) {
+  let first = true;
+  const done = (k) => { S.loaded[k] = 1; if (['trip', 'players', 'rounds', 'scores'].every(x => S.loaded[x])) { clearTimeout(timer); if (S.mode === 'loading') S.mode = 'live'; } render(); };
+  const onErr = (e) => { clearTimeout(timer); S.mode = 'offline'; S.err = e?.message; render(); };
+  const intoMap = snap => Object.fromEntries(snap.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
+  S.db.doc('trip/main').onSnapshot(s => { const d = s.exists ? s.data() : {}; S.real = S.real || {}; S.real.trip = { name: d.name || '', points: d.points || DEFAULT_POINTS }; if (!S.demo) S.trip = S.real.trip; done('trip'); }, onErr);
+  S.db.collection('players').onSnapshot(s => { S.real = S.real || {}; S.real.players = intoMap(s); if (!S.demo) S.players = S.real.players; done('players'); }, onErr);
+  S.db.collection('rounds').onSnapshot(s => { S.real = S.real || {}; S.real.rounds = intoMap(s); if (!S.demo) S.rounds = S.real.rounds; done('rounds'); }, onErr);
+  S.db.collection('scores').onSnapshot(s => {
+    const next = intoMap(s);
+    // keep un-flushed local edits on top of incoming data
+    for (const id in pendingScores) if (next[id]) next[id] = { ...next[id], holes: { ...next[id].holes, ...pendingScores[id] } };
+    if (!first && !S.demo) announce(S.scores, next);
+    first = false;
+    S.real = S.real || {}; S.real.scores = next; if (!S.demo) S.scores = next; done('scores');
+  }, onErr);
+}
+function announce(prev, next) {
+  for (const id in next) {
+    const r = S.rounds[next[id].roundId]; if (!r) continue;
+    const C = course(r); const a = prev[id]?.holes || {}, b = next[id].holes || {};
+    for (const h in b) {
+      if (a[h] === b[h] || typeof b[h] !== 'number') continue;
+      const diff = b[h] - C.par[h - 1];
+      const key = next[id].key; const who = S.players[key] ? pname(key) : (units(r).find(u => u.id === key)?.name || 'A team');
+      if (diff <= -1) toast(`${who} ${diff <= -3 ? 'albatross' : diff === -2 ? (b[h] === 1 ? 'hole in one' : 'eagle') : 'birdie'} on ${h}!`, 'birdie');
+      units(r).forEach(u => { if (u.keys.includes(key)) S.flash.add(r.id + ':' + u.id); });
+    }
+  }
+}
+
+/* ---------- sample trip (local only) ---------- */
+function sampleTrip() {
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const names = [['Dazza Kerr', 8], ['Mick Ralston', 14], ['Robbo Nguyen', 22], ['Johnno Price', 11], ['Hendo Walsh', 18], ['Davo Singh', 5], ['Smithy Lane', 27], ['Tommo Ford', 16], ['Gaz Moretti', 12], ['Kev Byrne', 20], ['Lachy Ward', 9], ['Fitzy Cole', 24]];
+  const players = {}; names.forEach(([n, h], i) => { const id = 'px' + i; players[id] = { id, name: n, hcp: h }; });
+  const ids = Object.keys(players);
+  const parA = DEFAULT_PAR, parB = [5,4,3,4,4,5,3,4,4, 4,4,3,5,4,3,4,5,4], parC = [4,3,5,4,4,3,4,5,4, 4,5,3,4,4,3,4,4,5];
+  const rounds = {
+    rs1: { id: 'rs1', order: 1, name: 'Round 1', course: 'Sandy Creek Links', date: 'Fri', format: 'ambrose', status: 'final', par: parA, si: DEFAULT_SI,
+      teams: [{ id: 'ts1', name: 'Sandbaggers', playerIds: [ids[0], ids[2], ids[7], ids[9]] }, { id: 'ts2', name: 'Grip It & Sip It', playerIds: [ids[5], ids[6], ids[3], ids[4]] }, { id: 'ts3', name: 'Shanks a Lot', playerIds: [ids[10], ids[11], ids[8], ids[1]] }],
+      sides: [{ id: 'sd1', label: 'Nearest the pin #7', winner: ids[3], points: 2 }, { id: 'sd2', label: 'Longest drive #4', winner: ids[5], points: 2 }] },
+    rs2: { id: 'rs2', order: 2, name: 'Round 2', course: 'Ridgeline Golf Club', date: 'Sat', format: 'fourbbb', status: 'live', par: parB, si: [9,3,17,1,11,7,15,5,13, 10,4,18,8,2,16,12,6,14],
+      teams: [[0, 6], [5, 11], [10, 2], [3, 9], [8, 4], [1, 7]].map((p, i) => ({ id: 'tb' + i, name: '', playerIds: p.map(k => ids[k]) })),
+      sides: [{ id: 'sd3', label: 'Nearest the pin #3', winner: ids[11], points: 2 }] },
+    rs3: { id: 'rs3', order: 3, name: 'Round 3', course: 'Ironbark Valley', date: 'Sun', format: 'stableford', status: 'upcoming', par: parC, si: DEFAULT_SI, sides: [] },
+  };
+  const scores = {};
+  const play = (r, key, hcp, upto, skill) => {
+    const C = course(r); const holes = {};
+    for (let h = 1; h <= upto; h++) {
+      const par = C.par[h - 1]; const s = shots(hcp, C.si[h - 1]);
+      let g = par + Math.round((rnd() * 2.4 - 1.1) + s * skill);
+      if (g < 2) g = 2; holes[h] = g;
+    }
+    scores[r.id + '__' + key] = { id: r.id + '__' + key, roundId: r.id, key, holes };
+  };
+  S.players = players; S.rounds = rounds;
+  rounds.rs1.teams.forEach(t => play(rounds.rs1, t.id, ambroseHcp(rounds.rs1, t.playerIds), 18, -0.1));
+  const thruR2 = [11, 12, 10, 11, 9, 12];
+  rounds.rs2.teams.forEach((t, i) => t.playerIds.forEach(pid => play(rounds.rs2, pid, Math.round(players[pid].hcp * .9), thruR2[i], 0.85)));
+  return { trip: { name: 'Boys Trip 2026', points: DEFAULT_POINTS }, players, rounds, scores };
+}
+function startDemo() {
+  const t = sampleTrip();
+  S.demo = true; S.trip = t.trip; S.players = t.players; S.rounds = t.rounds; S.scores = t.scores;
+  if (S.mode === 'loading' || S.mode === 'offline') S.mode = 'demo';
+  S.boardRound = 'rs2'; S.scoreRound = 'rs2';
+  render();
+}
+function exitDemo() {
+  S.demo = false; const R = S.real || {};
+  S.trip = R.trip || { name: '', points: DEFAULT_POINTS }; S.players = R.players || {}; S.rounds = R.rounds || {}; S.scores = R.scores || {};
+  S.boardRound = null; S.scoreRound = null; render();
+}
+
+/* ---------- toasts ---------- */
+function toast(msg, kind = '') {
+  const el = document.createElement('div'); el.className = 'toast ' + kind; el.textContent = msg;
+  $('#toasts').appendChild(el); setTimeout(() => el.remove(), 3800);
+}
+
+/* ---------- rendering ---------- */
+function pickRound(cur) {
+  const rs = sortedRounds(); if (!rs.length) return null;
+  if (cur && S.rounds[cur]) return cur;
+  return (rs.find(r => r.status === 'live') || [...rs].reverse().find(r => compute(r).started) || rs[0]).id;
+}
+function roundChips(sel, act) {
+  return `<div class="chips" role="group" aria-label="Rounds">${sortedRounds().map(r => `
+    <button class="chip" data-act="${act}" data-id="${r.id}" aria-pressed="${r.id === sel}">
+      <b>${esc(r.name || 'Round')}</b>
+      <span>${esc(r.course || 'Course TBC')}</span><br>
+      <span>${esc(fmt(r).name)} ${statusPill(r)}</span>
+    </button>`).join('')}</div>`;
+}
+function statusPill(r) { const s = r.status || 'upcoming'; return `<span class="status ${s}">${s === 'live' ? 'Live' : s === 'final' ? 'Final' : 'Upcoming'}</span>`; }
+
+function renderHeader() {
+  $('#tripName').innerHTML = esc(S.trip.name || 'The Leaderboard') + '<span class="flag"></span>';
+  const rs = sortedRounds(); const n = Object.keys(S.players).length;
+  $('#eyebrow').textContent = S.demo ? 'Sample trip' : (S.mode === 'live' ? 'Live scoring' : 'Golf trip');
+  $('#liveDot').hidden = !(S.mode === 'live' && !S.demo);
+  $('#heroMeta').innerHTML = rs.length ? `<b class="num">${n} players · ${rs.length} rounds</b>${rs.map(r => esc(r.course || r.name)).join(' · ')}` : '';
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-current', t.dataset.view === S.view ? 'page' : 'false'));
+  $('#setupTab').hidden = !(S.canEdit || S.demo);
+}
+
+function demoBanner() {
+  if (!S.demo) return '';
+  const canLeave = !!S.db;
+  return `<div class="banner"><span>You're looking at a sample trip with made-up players. Nothing you change here is saved.</span>${canLeave ? '<button data-act="exitDemo">Back to my trip</button>' : ''}</div>`;
+}
+
+function viewBoard() {
+  const rs = sortedRounds();
+  if (!rs.length) return welcome();
+  S.boardRound = pickRound(S.boardRound);
+  const r = S.rounds[S.boardRound]; const c = compute(r); const f = fmt(r);
+  const rows = c.rows.map(x => {
+    const t = scoreTile(r, x); const key = r.id + ':' + x.unit.id; const open = !!S.open[key];
+    const flash = S.flash.has(key); S.flash.delete(key);
+    const sub = f.team ? x.unit.members.map(firstName).join(' · ') + (f.teamScore ? ` · hcp ${x.unit.hcp}` : '') : `hcp ${x.unit.hcp}`;
+    return `<button class="lb-row" data-act="toggle" data-id="${key}" aria-expanded="${open}">
+      <span class="pos num">${x.pos == null ? '' : (x.tied ? 'T' : '') + x.pos}</span>
+      <span class="who"><b>${esc(x.unit.name)}</b><small>${esc(sub)}</small></span>
+      <span class="thru num">${x.thru === 18 ? 'F' : x.thru || '–'}</span>
+      <span class="tile num ${t.cls} ${flash ? 'flash' : ''}">${esc(t.text)}<small>${esc(t.label)}</small></span>
+    </button>${open ? `<div class="lb-card">${scorecard(r, x, c)}</div>` : ''}`;
+  }).join('');
+  const sides = (r.sides || []).filter(s => s.label);
+  return `<div class="stack">${demoBanner()}
+    ${roundChips(r.id, 'boardRound')}
+    <section class="board" aria-label="Leaderboard">
+      <div class="board-top"><div><h3>${esc(r.name)} · ${esc(r.course || 'Course TBC')}</h3><div class="sub">${esc(f.name)}${r.date ? ' · ' + esc(r.date) : ''}${r.format === 'skins' && c.carry ? ` · ${c.carry} skin${c.carry > 1 ? 's' : ''} carrying` : ''}</div></div>${statusPill(r)}</div>
+      <div class="lb-cols"><span>Pos</span><span>${f.team ? 'Team' : 'Player'}</span><span>Thru</span><span>${f.unit === 'nett' ? 'To par' : esc(f.unit)}</span></div>
+      ${rows || `<div class="empty">${f.team ? 'No teams yet. The organiser sets them up under Setup.' : 'No players in this round yet.'}</div>`}
+    </section>
+    ${sides.length ? `<section class="panel"><h3>Side comps</h3><div class="plist" style="margin-top:8px">${sides.map(s => `<div class="spread"><span>${esc(s.label)}</span><b>${s.winner ? esc(pname(s.winner)) : '<span class="sub">Not decided</span>'} ${s.winner && s.points ? `<span class="sub">+${esc(s.points)} pts</span>` : ''}</b></div>`).join('')}</div></section>` : ''}
+    ${miniStandings()}
+  </div>`;
+}
+
+function mark(g, par) {
+  if (g == null) return '';
+  if (g === 'P') return '<span class="mk pu">–</span>';
+  const d = g - par; const cls = d <= -2 ? 'b2' : d === -1 ? 'b1' : d === 1 ? 'o1' : d >= 2 ? 'o2' : '';
+  return `<span class="mk ${cls}">${g}</span>`;
+}
+function scorecard(r, x, c) {
+  const C = course(r); const f = fmt(r);
+  const head = `<tr><th>Hole</th>${[...Array(9)].map((_, i) => `<th>${i + 1}</th>`).join('')}<th class="tot">Out</th>${[...Array(9)].map((_, i) => `<th>${i + 10}</th>`).join('')}<th class="tot">In</th><th class="tot">Tot</th></tr>`;
+  const line = (label, fn, sumFn, cls = '') => {
+    const cells = []; let out = 0, inn = 0, any = [false, false];
+    for (let h = 0; h < 18; h++) { const { html, v } = fn(h); cells.push(`<td>${html}</td>`); if (typeof v === 'number') { if (h < 9) { out += v; any[0] = true; } else { inn += v; any[1] = true; } } }
+    const s = sumFn !== false;
+    return `<tr class="${cls}"><td>${esc(label)}</td>${cells.slice(0, 9).join('')}<td class="tot">${s && any[0] ? out : ''}</td>${cells.slice(9).join('')}<td class="tot">${s && any[1] ? inn : ''}</td><td class="tot">${s && (any[0] || any[1]) ? out + inn : ''}</td></tr>`;
+  };
+  const rows = [line('Par', h => ({ html: C.par[h], v: C.par[h] }), true, 'parrow'), line('Index', h => ({ html: C.si[h] }), false, 'parrow')];
+  if (r.format === 'fourbbb') {
+    x.unit.members.forEach(pid => rows.push(line(firstName(pid) + ` (${phcp(r, pid)})`, h => { const g = gv(r, pid, h + 1); return { html: mark(g, C.par[h]), v: typeof g === 'number' ? g : undefined }; })));
+    rows.push(line('Best pts', h => { const o = x.holes[h]; return { html: o ? `<b>${o.best}</b>` : '', v: o ? o.best : undefined }; }));
+  } else {
+    rows.push(line(f.teamScore ? 'Team gross' : 'Gross', h => { const o = x.holes[h]; return { html: o ? mark(o.g, o.par) : '', v: o && typeof o.g === 'number' ? o.g : undefined }; }));
+    if (r.format === 'stableford' || r.format === 'skins') rows.push(line('Points', h => { const o = x.holes[h]; return { html: o ? o.p : '', v: o ? o.p : undefined }; }));
+    if (r.format === 'skins') rows.push(line('Skins', h => { const w = c.skinHoles[h]; return { html: w && w.id === x.unit.id ? `<span class="skin">${w.n}</span>` : '' }; }, false));
+  }
+  return `<div class="sc-wrap"><table class="sc num"><thead>${head}</thead><tbody>${rows.join('')}</tbody></table></div>
+    <div class="sub" style="margin-top:8px">Circles are under par, squares over. ${f.teamScore ? `Team handicap ${x.unit.hcp}. ` : ''}${x.thru && r.format !== 'fourbbb' ? `Gross ${x.gross} through ${x.thru}.` : ''}</div>`;
+}
+
+function miniStandings() {
+  const { list } = tripStandings(); if (!list.length) return '';
+  const top = list.slice(0, 5);
+  return `<section class="panel"><div class="spread"><h3>Trip standings</h3><button class="btn sm" data-view="trip">Full table</button></div>
+    <div class="plist" style="margin-top:10px">${top.map(x => `<div class="spread"><span><b class="num" style="display:inline-block;width:28px">${x.pos}</b>${esc(pname(x.pid))}</span><b class="num">${x.total} pts</b></div>`).join('')}</div></section>`;
+}
+
+function welcome() {
+  const editor = S.canEdit;
+  return `<div class="stack">${demoBanner()}<section class="panel" style="padding:24px">
+    <h2>Tee times not set yet</h2>
+    <p class="sub" style="max-width:60ch">${editor ? 'Add the players and their handicaps, then add a round for each course with its format. Everyone with the link sees the live board as scores come in.' : 'The organiser hasn\'t set up the trip yet. Check back once players and rounds are added.'}</p>
+    <div class="row">${editor ? '<button class="btn primary" data-view="setup">Set up the trip</button>' : ''}<button class="btn" data-act="demo">Preview with a sample trip</button></div>
+  </section>${formatsGrid()}</div>`;
+}
+
+function viewScore() {
+  const rs = sortedRounds(); if (!rs.length) return welcome();
+  S.scoreRound = pickRound(S.scoreRound);
+  const r = S.rounds[S.scoreRound]; const f = fmt(r); const C = course(r);
+  const ents = entities(r);
+  const selKey = 'golf.sel.' + r.id;
+  let sel = (LS.get(selKey, null) || S['sel_' + r.id] || []).filter(k => ents.some(e => e.key === k));
+  const pickerOpen = !sel.length || S.pickOpen;
+  const ro = !S.canWrite && !S.demo;
+  let hole = S.hole[r.id];
+  if (!hole) { hole = 1; for (let h = 1; h <= 18; h++) { if (sel.some(k => gv(r, k, h) == null)) { hole = h; break; } } }
+  if (sel.length) S.hole[r.id] = hole;
+  const par = C.par[hole - 1], si = C.si[hole - 1];
+  const holesNav = [...Array(18)].map((_, i) => { const h = i + 1; const done = sel.length && sel.every(k => gv(r, k, h) != null); return `<button class="hole-btn num ${done ? 'done' : ''}" data-act="hole" data-id="${h}" aria-current="${h === hole}">${h}</button>`; }).join('');
+  const entries = sel.map(k => {
+    const e = ents.find(x => x.key === k); const g = gv(r, k, hole); const s = shots(e.hcp, si);
+    let res = '';
+    if (g === 'P') res = 'Picked up · 0 pts';
+    else if (g != null) {
+      const d = g - par; const names = { '-3': 'Albatross', '-2': 'Eagle', '-1': 'Birdie', '0': 'Par', '1': 'Bogey', '2': 'Double' };
+      res = (g === 1 ? 'Hole in one' : names[d] || (d > 0 ? '+' + d : d)) + (f.pickup || r.format === 'stroke' || f.teamScore ? ` · nett ${g - s}` : '');
+      if (r.format === 'stableford' || r.format === 'fourbbb' || r.format === 'skins') res += ` · ${stbl(par, g, s)} pts`;
+    }
+    const dots = s > 0 ? `<span class="dots" title="${s} shot${s > 1 ? 's' : ''}">${'<i></i>'.repeat(Math.min(s, 3))}</span>` : '';
+    return `<div class="entry">
+      <div class="nm"><b>${esc(e.name)}${dots}</b><small>${esc(e.sub || '')}${e.sub ? ' · ' : ''}hcp ${e.hcp}${s ? ` · gets ${s} shot${s > 1 ? 's' : ''} here` : ''}</small>
+        <div class="result ${typeof g === 'number' && g < par ? 'good' : ''}" style="text-align:left">${esc(res)}</div></div>
+      <div class="stepper">
+        <button aria-label="One less" data-act="dec" data-id="${esc(k)}" ${ro ? 'disabled' : ''}>−</button>
+        <button class="val num ${g == null ? 'unset' : ''} ${typeof g === 'number' && g < par ? 'under' : ''}" data-act="setpar" data-id="${esc(k)}" ${ro ? 'disabled' : ''} aria-label="Score">${g == null ? 'Tap' : g === 'P' ? 'P' : g}</button>
+        <button aria-label="One more" data-act="inc" data-id="${esc(k)}" ${ro ? 'disabled' : ''}>+</button>
+        ${f.pickup ? `<button class="pu" data-act="pickup" data-id="${esc(k)}" aria-pressed="${g === 'P'}" ${ro ? 'disabled' : ''}>Pick up</button>` : ''}
+      </div></div>`;
+  }).join('');
+  return `<div class="stack">${demoBanner()}
+    ${roundChips(r.id, 'scoreRound')}
+    ${ro ? '<div class="banner"><span>You can follow along, but only people with edit access can enter scores. Ask the organiser.</span></div>' : ''}
+    <section class="panel">
+      <div class="spread"><div><h3>Who are you scoring?</h3><div class="sub">${f.teamScore ? 'Ambrose has one score per team.' : 'Pick everyone in your group. One person can keep the card for the whole group.'}</div></div>
+      ${!pickerOpen ? `<button class="btn sm" data-act="pickOpen">Change</button>` : ''}</div>
+      ${pickerOpen ? `<div class="picker" style="margin-top:12px">${ents.map(e => `<button class="pick" data-act="pick" data-id="${esc(e.key)}" aria-pressed="${sel.includes(e.key)}">${esc(e.name)}</button>`).join('') || '<span class="sub">Nobody is in this round yet.</span>'}</div>
+        ${sel.length ? '<div style="margin-top:12px"><button class="btn primary sm" data-act="pickDone">Done</button></div>' : ''}`
+      : `<div class="sub" style="margin-top:6px">${sel.map(k => esc(ents.find(e => e.key === k)?.name)).join(', ')}</div>`}
+    </section>
+    ${sel.length ? `
+    <div class="holes" role="group" aria-label="Holes">${holesNav}</div>
+    <div class="hole-card">
+      <div class="big num"><small>Hole</small>${hole}</div>
+      <div class="hole-facts"><div><b class="num">${par}</b><span>Par</span></div><div><b class="num">${si}</b><span>Index</span></div></div>
+    </div>
+    <section class="panel" style="padding-block:4px">${entries}</section>
+    <div class="navrow"><button class="btn" data-act="hole" data-id="${Math.max(1, hole - 1)}" ${hole === 1 ? 'disabled' : ''}>← Hole ${Math.max(1, hole - 1)}</button>
+      <button class="btn primary" data-act="hole" data-id="${Math.min(18, hole + 1)}" ${hole === 18 ? 'disabled' : ''}>Hole ${Math.min(18, hole + 1)} →</button></div>
+    <p class="sub">Tap the score box to start at par, then use − and +. Scores save as you go and show on the live board for everyone. Yellow dots mean a handicap shot on this hole.</p>` : ''}
+  </div>`;
+}
+
+function viewTrip() {
+  const { list, rounds } = tripStandings();
+  if (!list.length) return welcome();
+  const top = list.slice(0, 3);
+  const pod = top.map((x, i) => `<div class="p${i + 1}-wrap"><div class="pod p${i + 1}"><div class="rk num">${x.pos}</div><b>${esc(pname(x.pid))}</b><div class="pts num">${x.total}</div><div class="sub" style="color:inherit;opacity:.75">points</div></div></div>`).join('');
+  const table = (S.trip.points && S.trip.points.length ? S.trip.points : DEFAULT_POINTS);
+  return `<div class="stack">${demoBanner()}
+    <div class="spread"><div><h2>Trip standings</h2><div class="sub">Points for where you finish in each round, plus side comps. Team rounds give every team member the team's points.</div></div></div>
+    ${list.some(x => x.total) ? `<div class="podium">${pod}</div>` : ''}
+    <section class="board"><div class="tbl-wrap"><table class="st num">
+      <thead><tr><th>Pos</th><th>Player</th>${rounds.map(r => `<th title="${esc(r.course || '')}">${esc(r.name)}</th>`).join('')}<th>Sides</th><th>Total</th></tr></thead>
+      <tbody>${list.map(x => `<tr><td class="rk">${x.pos}</td><td>${esc(pname(x.pid))}</td>${rounds.map(r => { const v = x.by[r.id]; const prov = r.status !== 'final' && v != null; return `<td class="${prov ? 'prov' : ''}">${v == null ? '–' : v}</td>`; }).join('')}<td>${x.sides || '–'}</td><td class="total">${x.total}</td></tr>`).join('')}</tbody>
+    </table></div></section>
+    <p class="sub">Points by finishing position: ${table.map((p, i) => `${ordinal(i + 1)} ${p}`).join(' · ')}. Ties share the points. Italic numbers come from rounds still in play.</p>
+  </div>`;
+}
+const ordinal = n => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
+
+function formatsGrid() {
+  return `<div class="formats">${Object.values(FORMATS).map(f => `<div><h3>${esc(f.name)}</h3><p>${esc(f.desc)}</p></div>`).join('')}</div>`;
+}
+function viewFormats() {
+  return `<div class="stack"><div><h2>Game formats</h2><p class="sub">Each round can use a different format. Handicaps are applied hole by hole using the course's stroke index.</p></div>${formatsGrid()}
+  <section class="panel"><h3>How handicaps work here</h3><p class="sub" style="margin-bottom:0">Enter each player's handicap for the trip. You can override it per round if a course gives a different daily handicap. A player with handicap 14 gets one shot on the 14 hardest holes (index 1 to 14). Over 18, they get a second shot on the hardest holes too.</p></section></div>`;
+}
+
+/* ---------- setup ---------- */
+function viewSetup() {
+  if (!(S.canEdit || S.demo)) return `<div class="empty">Only the organiser can change the setup.</div>`;
+  const ps = sortedPlayers();
+  return `<div class="stack">${demoBanner()}
+  <section class="panel stack">
+    <h3>Trip</h3>
+    <div class="grid2">
+      <div class="field"><label for="tripNameIn">Trip name</label><input class="inp" id="tripNameIn" data-save="tripName" value="${esc(S.trip.name)}" placeholder="Boys Trip 2026"></div>
+      <div class="field"><label for="pointsIn">Points for 1st, 2nd, 3rd…</label><input class="inp num" id="pointsIn" data-save="points" value="${esc((S.trip.points || DEFAULT_POINTS).join(', '))}"></div>
+    </div>
+  </section>
+  <section class="panel stack">
+    <div class="spread"><div><h3>Players</h3><div class="sub">${ps.length} on the trip. Handicap is the playing handicap for the trip.</div></div></div>
+    <div class="plist">
+      <div class="prow sub"><span>Name</span><span>Handicap</span><span></span></div>
+      ${ps.map(p => `<div class="prow"><input class="inp" id="pn_${p.id}" data-save="pname" data-id="${p.id}" value="${esc(p.name)}" aria-label="Name"><input class="inp num" id="ph_${p.id}" type="number" inputmode="decimal" step="1" data-save="phcp" data-id="${p.id}" value="${esc(p.hcp)}" aria-label="Handicap"><button class="iconbtn" data-act="delPlayer" data-id="${p.id}" aria-label="Remove ${esc(p.name)}">×</button></div>`).join('')}
+      <form class="prow" id="addPlayer"><input class="inp" id="newPName" placeholder="Add a player" required><input class="inp num" id="newPHcp" type="number" inputmode="decimal" placeholder="Hcp"><button class="iconbtn" aria-label="Add player" style="color:var(--green-2);font-weight:800">+</button></form>
+    </div>
+  </section>
+  <section class="stack">
+    <div class="spread"><h3>Rounds</h3><button class="btn primary sm" data-act="addRound">Add a round</button></div>
+    ${sortedRounds().map(roundEditor).join('') || '<div class="empty panel">No rounds yet. Add one for each course you\'re playing.</div>'}
+  </section></div>`;
+}
+function roundEditor(r) {
+  const open = S.editRound === r.id; const f = fmt(r); const C = course(r);
+  const head = `<button data-act="editRound" data-id="${r.id}" aria-expanded="${open}"><span><b style="font-family:var(--f-display);font-size:20px;text-transform:uppercase">${esc(r.name)}</b> <span class="sub">${esc(r.course || 'Course TBC')} · ${esc(f.name)}</span></span>${statusPill(r)}</button>`;
+  if (!open) return `<div class="rcard">${head}</div>`;
+  const ps = sortedPlayers();
+  const siBad = new Set(); const seen = {}; C.si.forEach((v, i) => { if (seen[v] != null || v < 1 || v > 18) { siBad.add(i); siBad.add(seen[v]); } seen[v] = i; });
+  const courseGrid = `<div class="course"><table><tr><th></th>${[...Array(18)].map((_, i) => `<th>${i + 1}</th>`).join('')}<th>Tot</th></tr>
+    <tr><th>Par</th>${C.par.map((v, i) => `<td><input class="num" id="par_${r.id}_${i}" data-save="par" data-id="${r.id}" data-i="${i}" type="number" inputmode="numeric" min="3" max="6" value="${v}" aria-label="Par hole ${i + 1}"></td>`).join('')}<td><b class="num">${C.par.reduce((a, b) => a + b, 0)}</b></td></tr>
+    <tr><th>Index</th>${C.si.map((v, i) => `<td><input class="num ${siBad.has(i) ? 'bad' : ''}" id="si_${r.id}_${i}" data-save="si" data-id="${r.id}" data-i="${i}" type="number" inputmode="numeric" min="1" max="18" value="${v}" aria-label="Index hole ${i + 1}"></td>`).join('')}<td></td></tr></table></div>
+    ${siBad.size ? '<div class="sub" style="color:var(--red)">Each stroke index from 1 to 18 should appear once. Copy it off the scorecard.</div>' : ''}`;
+  let teamsUi = '';
+  if (f.team) {
+    const teams = r.teams || [];
+    const size = r.format === 'fourbbb' ? 2 : (r.teamSize || 4);
+    teamsUi = `<div class="stack" style="gap:10px"><div class="spread"><h3>Teams</h3><div class="row">
+      ${r.format === 'ambrose' ? `<label class="sub" for="tsize_${r.id}">Team size</label><select class="inp" style="width:auto" id="tsize_${r.id}" data-save="teamSize" data-id="${r.id}">${[2, 3, 4].map(n => `<option ${n === size ? 'selected' : ''}>${n}</option>`).join('')}</select>` : ''}
+      <button class="btn flagb sm" data-act="drawTeams" data-id="${r.id}">Draw balanced teams</button></div></div>
+      ${teams.length ? `<div class="teams">${teams.map((t, i) => { const m = (t.playerIds || []).filter(id => S.players[id]); return `<div class="team"><input class="inp" id="tn_${t.id}" data-save="teamName" data-id="${r.id}" data-t="${t.id}" value="${esc(t.name || '')}" placeholder="${esc(teamLabel(m, i))}" aria-label="Team name"><ul>${m.map(p => `<li>${esc(pname(p))} <span class="sub">${baseH(r, p)}</span></li>`).join('') || '<li class="sub">Empty</li>'}</ul>${f.teamScore ? `<span class="sub">Team handicap ${ambroseHcp(r, m)}</span>` : ''}</div>`; }).join('')}</div>` : '<div class="sub">No teams yet. Draw them, or add teams and move players by hand.</div>'}
+      <details><summary class="sub" style="cursor:pointer">Move players between teams</summary>
+        <div class="row" style="margin:10px 0"><button class="btn sm" data-act="addTeam" data-id="${r.id}">Add a team</button>${teams.length ? `<button class="btn sm danger" data-act="dropTeam" data-id="${r.id}">Remove last team</button>` : ''}</div>
+        <div class="assign">${ps.map(p => { const cur = teams.findIndex(t => (t.playerIds || []).includes(p.id)); return `<label>${esc(p.name)}<select class="inp" id="as_${r.id}_${p.id}" data-save="assign" data-id="${r.id}" data-p="${p.id}"><option value="-1">Not playing</option>${teams.map((t, i) => `<option value="${i}" ${i === cur ? 'selected' : ''}>${esc(t.name || 'Team ' + (i + 1))}</option>`).join('')}</select></label>`; }).join('')}</div>
+      </details></div>`;
+  } else {
+    const inRound = new Set(roundPlayers(r));
+    teamsUi = `<div class="stack" style="gap:8px"><h3>Who's playing</h3><div class="checks">${ps.map(p => `<label><input type="checkbox" id="pl_${r.id}_${p.id}" data-save="playing" data-id="${r.id}" data-p="${p.id}" ${inRound.has(p.id) ? 'checked' : ''}>${esc(p.name)}</label>`).join('')}</div></div>`;
+  }
+  const hcpUi = `<details><summary class="sub" style="cursor:pointer">Handicap overrides for this course</summary><div class="assign" style="margin-top:10px">${ps.map(p => `<label>${esc(p.name)}<input class="inp num" style="max-width:80px" type="number" inputmode="decimal" id="ho_${r.id}_${p.id}" data-save="hcpOverride" data-id="${r.id}" data-p="${p.id}" value="${esc(r.hcp?.[p.id] ?? '')}" placeholder="${esc(p.hcp ?? 0)}"></label>`).join('')}</div></details>`;
+  const sides = r.sides || [];
+  const sidesUi = `<div class="stack" style="gap:8px"><div class="spread"><h3>Side comps</h3><button class="btn sm" data-act="addSide" data-id="${r.id}">Add side comp</button></div>
+    ${sides.map(s => `<div class="grid2" style="grid-template-columns:minmax(0,2fr) minmax(0,2fr) 70px 40px;align-items:center;gap:8px">
+      <input class="inp" id="sl_${s.id}" data-save="sideLabel" data-id="${r.id}" data-s="${s.id}" value="${esc(s.label)}" placeholder="Nearest the pin #7" aria-label="Side comp">
+      <select class="inp" id="sw_${s.id}" data-save="sideWinner" data-id="${r.id}" data-s="${s.id}" aria-label="Winner"><option value="">Winner…</option>${ps.map(p => `<option value="${p.id}" ${s.winner === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+      <input class="inp num" type="number" id="sp_${s.id}" data-save="sidePts" data-id="${r.id}" data-s="${s.id}" value="${esc(s.points ?? 2)}" aria-label="Points">
+      <button class="iconbtn" data-act="delSide" data-id="${r.id}" data-s="${s.id}" aria-label="Remove side comp">×</button></div>`).join('') || '<div class="sub">Nearest the pin, longest drive, whatever you like. Winners get bonus trip points.</div>'}</div>`;
+  return `<div class="rcard">${head}<div class="rbody">
+    <div class="grid2">
+      <div class="field"><label for="rn_${r.id}">Name</label><input class="inp" id="rn_${r.id}" data-save="rfield" data-f="name" data-id="${r.id}" value="${esc(r.name)}"></div>
+      <div class="field"><label for="rc_${r.id}">Course</label><input class="inp" id="rc_${r.id}" data-save="rfield" data-f="course" data-id="${r.id}" value="${esc(r.course || '')}" placeholder="Course name"></div>
+      <div class="field"><label for="rd_${r.id}">Day</label><input class="inp" id="rd_${r.id}" data-save="rfield" data-f="date" data-id="${r.id}" value="${esc(r.date || '')}" placeholder="Fri 9:30am"></div>
+      <div class="field"><label for="rf_${r.id}">Format</label><select class="inp" id="rf_${r.id}" data-save="rfield" data-f="format" data-id="${r.id}">${Object.entries(FORMATS).map(([k, v]) => `<option value="${k}" ${k === r.format ? 'selected' : ''}>${v.name}</option>`).join('')}</select></div>
+      <div class="field"><label for="rs_${r.id}">Status</label><select class="inp" id="rs_${r.id}" data-save="rfield" data-f="status" data-id="${r.id}">${['upcoming', 'live', 'final'].map(s => `<option value="${s}" ${s === (r.status || 'upcoming') ? 'selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select></div>
+    </div>
+    <div class="fmt-desc">${esc(f.desc)}</div>
+    <div class="stack" style="gap:8px"><h3>Course</h3><div class="sub">Par and stroke index for each hole, from the course scorecard.</div>${courseGrid}</div>
+    ${teamsUi}${hcpUi}${sidesUi}
+    <div class="row"><button class="btn danger sm" data-act="delRound" data-id="${r.id}">${S.confirmDel === r.id ? 'Tap again to delete this round and its scores' : 'Delete round'}</button></div>
+  </div></div>`;
+}
+
+function drawTeams(r) {
+  const size = r.format === 'fourbbb' ? 2 : (r.teamSize || 4);
+  const ps = sortedPlayers().map(p => ({ id: p.id, k: baseH(r, p.id) + Math.random() * 4 })).sort((a, b) => a.k - b.k);
+  const n = Math.max(1, Math.ceil(ps.length / size));
+  const teams = [...Array(n)].map((_, i) => ({ id: uid('t'), name: '', playerIds: [] }));
+  ps.forEach((p, i) => { const round = Math.floor(i / n); const idx = round % 2 === 0 ? i % n : n - 1 - (i % n); teams[idx].playerIds.push(p.id); });
+  return teams;
+}
+
+/* ---------- main render ---------- */
+function render() {
+  renderHeader();
+  const main = $('#main');
+  if (S.mode === 'loading') { main.innerHTML = '<div class="empty">Loading the board…</div>'; return; }
+  if (S.mode === 'offline' && !S.demo) { main.innerHTML = `<div class="stack"><section class="panel"><h2>Can't reach the scores</h2><p class="sub">The live scores didn't load. Check your signal and reopen the page. ${esc(S.err || '')}</p><button class="btn" data-act="demo">Preview with a sample trip</button></section></div>`; return; }
+  // keep focus + unsaved typing across live re-renders
+  const ae = document.activeElement; const focusId = ae && ae.id && main.contains(ae) ? ae.id : null;
+  let selStart = null; try { selStart = focusId ? ae.selectionStart : null; } catch (e) {}
+  const dirty = {}; main.querySelectorAll('[data-dirty]').forEach(el => { if (el.id) dirty[el.id] = el.value; });
+  const scrollY = window.scrollY;
+  const views = { board: viewBoard, score: viewScore, trip: viewTrip, formats: viewFormats, setup: viewSetup };
+  main.innerHTML = (views[S.view] || viewBoard)();
+  for (const id in dirty) { const el = document.getElementById(id); if (el) { el.value = dirty[id]; el.dataset.dirty = '1'; } }
+  if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus({ preventScroll: true }); try { if (selStart != null) el.setSelectionRange(selStart, selStart); } catch (e) {} } }
+  if (Math.abs(window.scrollY - scrollY) > 2) window.scrollTo(0, scrollY);
+}
+
+/* ---------- routing ---------- */
+const VIEWS = ['board', 'score', 'trip', 'formats', 'setup'];
+function route() { const h = location.hash.slice(1); S.view = VIEWS.includes(h) ? h : 'board'; }
+function go(v) { if (location.hash.slice(1) !== v) location.hash = v; else { S.view = v; render(); } window.scrollTo(0, 0); }
+window.addEventListener('hashchange', () => { route(); render(); });
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const v = e.target.closest('[data-view]'); if (v && !v.matches('select,input')) { go(v.dataset.view); return; }
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act, id = b.dataset.id;
+  const r = S.rounds[S.view === 'setup' ? id : S.scoreRound];
+  switch (act) {
+    case 'boardRound': S.boardRound = id; render(); break;
+    case 'scoreRound': S.scoreRound = id; S.pickOpen = false; render(); break;
+    case 'toggle': S.open[id] = !S.open[id]; render(); break;
+    case 'demo': startDemo(); break;
+    case 'exitDemo': exitDemo(); break;
+    case 'pick': {
+      const k = 'golf.sel.' + S.scoreRound; let sel = LS.get(k, null) || S['sel_' + S.scoreRound] || [];
+      sel = sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id];
+      LS.set(k, sel); S['sel_' + S.scoreRound] = sel; S.pickOpen = true; delete S.hole[S.scoreRound]; render(); break;
+    }
+    case 'pickDone': S.pickOpen = false; render(); break;
+    case 'pickOpen': S.pickOpen = true; render(); break;
+    case 'hole': S.hole[S.scoreRound] = Number(id); render(); break;
+    case 'setpar': case 'inc': case 'dec': case 'pickup': {
+      const C = course(r); const h = S.hole[r.id] || currentHole(r); S.hole[r.id] = h; const par = C.par[h - 1];
+      const g = gv(r, id, h); let n;
+      if (act === 'pickup') n = g === 'P' ? null : 'P';
+      else if (g == null || g === 'P') n = act === 'dec' ? par - 1 : act === 'inc' ? par + 1 : par;
+      else if (act === 'setpar') return;
+      else n = Math.min(15, Math.max(1, g + (act === 'inc' ? 1 : -1)));
+      setHole(r, id, h, n); break;
+    }
+    case 'addRound': {
+      const n = Object.keys(S.rounds).length + 1; const rid = uid('r');
+      setDoc('rounds/' + rid, { name: 'Round ' + n, course: '', date: '', format: 'stableford', status: 'upcoming', order: n, par: DEFAULT_PAR, si: DEFAULT_SI, teams: [], sides: [], hcp: {} });
+      S.editRound = rid; render(); break;
+    }
+    case 'editRound': S.editRound = S.editRound === id ? null : id; S.confirmDel = null; render(); break;
+    case 'delRound':
+      if (S.confirmDel !== id) { S.confirmDel = id; render(); break; }
+      S.confirmDel = null; delDoc('rounds/' + id);
+      Object.keys(S.scores).filter(k => k.startsWith(id + '__')).forEach(k => delDoc('scores/' + k));
+      break;
+    case 'delPlayer':
+      if (S.confirmDelP !== id) { S.confirmDelP = id; b.textContent = '?'; b.title = 'Tap again to remove'; toast('Tap × again to remove ' + pname(id)); setTimeout(() => { S.confirmDelP = null; }, 4000); break; }
+      S.confirmDelP = null; delDoc('players/' + id); break;
+    case 'drawTeams': updateDoc('rounds/' + id, { teams: drawTeams(r) }); toast('Teams drawn. Shuffle again any time.'); break;
+    case 'addTeam': updateDoc('rounds/' + id, { teams: [...(r.teams || []), { id: uid('t'), name: '', playerIds: [] }] }); break;
+    case 'dropTeam': updateDoc('rounds/' + id, { teams: (r.teams || []).slice(0, -1) }); break;
+    case 'addSide': updateDoc('rounds/' + id, { sides: [...(r.sides || []), { id: uid('s'), label: '', winner: '', points: 2 }] }); break;
+    case 'delSide': updateDoc('rounds/' + id, { sides: (r.sides || []).filter(s => s.id !== b.dataset.s) }); break;
+  }
+});
+function currentHole(r) { return S.hole[r.id] || 1; }
+
+document.addEventListener('input', e => { if (e.target.dataset.save) e.target.dataset.dirty = '1'; });
+document.addEventListener('change', e => {
+  const el = e.target; const k = el.dataset.save; if (!k) return;
+  delete el.dataset.dirty;
+  const id = el.dataset.id; const r = S.rounds[id];
+  const num = v => v === '' ? null : Number(v);
+  switch (k) {
+    case 'tripName': setDoc('trip/main', { ...S.trip, name: el.value.trim() }); break;
+    case 'points': { const pts = el.value.split(/[,\s]+/).map(Number).filter(n => isFinite(n) && n >= 0); if (pts.length) setDoc('trip/main', { ...S.trip, points: pts }); break; }
+    case 'pname': if (el.value.trim()) updateDoc('players/' + id, { name: el.value.trim() }); break;
+    case 'phcp': updateDoc('players/' + id, { hcp: num(el.value) ?? 0 }); break;
+    case 'rfield': updateDoc('rounds/' + id, { [el.dataset.f]: el.value }); break;
+    case 'par': case 'si': { const arr = [...course(r)[k]]; arr[Number(el.dataset.i)] = Number(el.value) || 0; updateDoc('rounds/' + id, { [k]: arr }); break; }
+    case 'teamSize': updateDoc('rounds/' + id, { teamSize: Number(el.value) }); break;
+    case 'teamName': updateDoc('rounds/' + id, { teams: (r.teams || []).map(t => t.id === el.dataset.t ? { ...t, name: el.value.trim() } : t) }); break;
+    case 'assign': {
+      const pid = el.dataset.p, to = Number(el.value);
+      const teams = (r.teams || []).map((t, i) => ({ ...t, playerIds: (t.playerIds || []).filter(x => x !== pid).concat(i === to ? [pid] : []) }));
+      updateDoc('rounds/' + id, { teams }); break;
+    }
+    case 'playing': {
+      const cur = new Set(roundPlayers(r)); el.checked ? cur.add(el.dataset.p) : cur.delete(el.dataset.p);
+      updateDoc('rounds/' + id, { playerIds: [...cur] }); break;
+    }
+    case 'hcpOverride': updateDoc('rounds/' + id, { hcp: { [el.dataset.p]: el.value === '' ? null : Number(el.value) } }); break;
+    case 'sideLabel': case 'sideWinner': case 'sidePts': {
+      const f = { sideLabel: 'label', sideWinner: 'winner', sidePts: 'points' }[k];
+      updateDoc('rounds/' + id, { sides: (r.sides || []).map(s => s.id === el.dataset.s ? { ...s, [f]: f === 'points' ? Number(el.value) || 0 : el.value } : s) }); break;
+    }
+  }
+});
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'addPlayer') return; e.preventDefault();
+  const name = $('#newPName').value.trim(); if (!name) return;
+  const hcp = Number($('#newPHcp').value) || 0;
+  setDoc('players/' + uid('p'), { name, hcp });
+  $('#newPName').value = ''; $('#newPHcp').value = ''; $('#newPName').focus();
+});
+
+/* ---------- boot ---------- */
+async function init() {
+  route(); render();
+  const c = window.claude;
+  if (!c || typeof c.use !== 'function') { startDemo(); return; }
+  const timer = setTimeout(() => { if (S.mode === 'loading') { S.mode = 'offline'; render(); } }, 10000);
+  const [db, user] = await Promise.all([c.use('db').catch(() => null), c.use('user').catch(() => null)]);
+  S.user = user;
+  if (!db) { clearTimeout(timer); startDemo(); return; }
+  S.db = db;
+  try { S.canEdit = user ? await user.canEdit() : false; const w = user ? await user.can('data.write') : null; S.canWrite = w !== false; } catch (e) {}
+  subscribe(timer);
+}
+init();
+})();
+</script>
