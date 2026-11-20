@@ -26,4 +26,6 @@ Open `index.html` outside claude.ai and it runs a local sample trip with made-up
 2. In Firebase: Authentication > Sign-in method > enable **Anonymous**. Firestore Database > create database, then paste `docs/firestore.rules` into the Rules tab and publish.
 3. GitHub repo Settings > Pages: deploy from this branch, folder `/docs`.
 
+4. Optional, for videos: Firebase Storage needs the pay-as-you-go (Blaze) plan. Turn on Storage and paste `docs/storage.rules` into its Rules tab. Without it, photos still work (stored inline in Firestore) but videos can't be posted.
+
 Setup is locked with an organiser PIN chosen on first use. Anyone with the link can enter scores.

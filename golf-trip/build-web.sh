@@ -10,6 +10,7 @@ FB=10.12.2
   echo "<script src=\"https://www.gstatic.com/firebasejs/$FB/firebase-app-compat.js\"></script>"
   echo "<script src=\"https://www.gstatic.com/firebasejs/$FB/firebase-auth-compat.js\"></script>"
   echo "<script src=\"https://www.gstatic.com/firebasejs/$FB/firebase-firestore-compat.js\"></script>"
+  echo "<script src=\"https://www.gstatic.com/firebasejs/$FB/firebase-storage-compat.js\"></script>"
   echo '<script src="firebase-config.js"></script>'
   echo '</head><body>'
   cat index.html

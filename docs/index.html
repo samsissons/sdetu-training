@@ -4,6 +4,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 </head><body>
 <title>Golf Trip Leaderboard</title>
@@ -98,7 +99,32 @@ h3{font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-si
 .lb-row:hover{background:color-mix(in srgb,var(--chip) 50%,transparent)}
 .lb-row[aria-expanded="true"]{background:var(--chip)}
 .pos{font-family:var(--f-display);font-weight:800;font-size:22px;text-align:center}
-.who{min-width:0}
+.who{min-width:0;display:flex;align-items:center;gap:10px}
+.who > span:last-child{min-width:0}
+.av{border-radius:50%;object-fit:cover;flex:0 0 auto;background:var(--chip);display:inline-grid;place-items:center;font-family:var(--f-display);font-weight:800;color:var(--green-2);overflow:hidden;text-transform:uppercase}
+.avs{display:flex;flex:0 0 auto}
+.avs .av+.av{margin-left:-10px;box-shadow:0 0 0 2px var(--surface)}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;box-shadow:var(--shadow);min-width:0}
+.pcard b{font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcard .nick{font-size:12px;color:var(--muted);font-style:italic;min-height:16px}
+.pcard .need{font-size:11px;color:var(--red);font-weight:700;letter-spacing:.04em}
+.pcard .stat{font-family:var(--f-display);font-weight:800;font-size:16px;text-transform:uppercase;letter-spacing:.04em}
+.profile-hero{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.filebtn{position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:6px}
+.mthumb{aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;border:0;padding:0;background:var(--chip);max-width:100%}
+.mthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.mthumb .play{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700}
+.lightbox{position:fixed;inset:0;z-index:60;background:rgba(4,10,7,.94);display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top,0px) + 10px) max(12px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 10px) max(12px,env(safe-area-inset-left,0px))}
+.lightbox .stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.lightbox img,.lightbox video{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
+.lightbox .bar{color:#f2f6f3;display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;flex-wrap:wrap}
+.lightbox .bar small{opacity:.75}
+.lbb{background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:999px;padding:8px 14px;font-weight:700}
+.lbb.del{background:rgba(255,93,110,.25)}
+.nudge{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border:1.5px dashed var(--green-2);border-radius:12px;padding:10px 14px;font-size:13px;font-weight:600}
 .who b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .who small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .thru{text-align:center;font-weight:600;color:var(--muted);font-size:13px}
@@ -131,6 +157,7 @@ table.sc{border-collapse:collapse;font-size:13px;min-width:100%}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
 .picker{display:flex;flex-wrap:wrap;gap:8px}
 .pick{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 13px;font-weight:600;font-size:14px}
+.chips .pick{flex:0 0 auto;white-space:nowrap}
 .pick[aria-pressed="true"]{background:var(--green);border-color:var(--green);color:var(--on-green)}
 .holes{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:5px}
 .hole-btn{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 0;font-family:var(--f-display);font-weight:800;font-size:17px}
@@ -241,6 +268,8 @@ table.st{width:100%;border-collapse:collapse;font-size:14px}
     <button class="tab" data-view="board">Live board</button>
     <button class="tab" data-view="score">Enter scores</button>
     <button class="tab" data-view="cards">Scorecards</button>
+    <button class="tab" data-view="players">Players</button>
+    <button class="tab" data-view="photos">Photos</button>
     <button class="tab" data-view="trip">Trip standings</button>
     <button class="tab" data-view="formats">Formats</button>
     <button class="tab" data-view="setup" id="setupTab">Setup</button>
@@ -248,6 +277,7 @@ table.st{width:100%;border-collapse:collapse;font-size:14px}
 </nav>
 <main class="inner" id="main"><div class="empty">Loading the board…</div></main>
 <div class="toasts" id="toasts" aria-live="polite"></div>
+<div id="lightbox"></div>
 
 <script>
 (() => {
@@ -279,7 +309,7 @@ const FORMATS = {
 
 const S = {
   mode: 'loading', db: null, user: null, canEdit: false, canWrite: true, demo: false, realEmpty: false,
-  trip: { name: '', points: DEFAULT_POINTS }, players: {}, rounds: {}, scores: {},
+  trip: { name: '', points: DEFAULT_POINTS }, players: {}, rounds: {}, scores: {}, media: {},
   loaded: {}, view: 'board', boardRound: null, scoreRound: null, open: {}, editRound: null, hole: {},
   flash: new Set(), real: null,
 };
@@ -457,6 +487,7 @@ function subscribe(timer) {
   S.db.doc('trip/main').onSnapshot(s => { const d = s.exists ? s.data() : {}; S.real = S.real || {}; S.real.trip = { name: d.name || '', points: d.points || DEFAULT_POINTS, ...(d.pinHash ? { pinHash: d.pinHash } : {}) }; if (S.backend === 'firebase') S.canEdit = !!d.pinHash && LS.get('golf.pin', '') === d.pinHash; if (!S.demo) S.trip = S.real.trip; done('trip'); }, onErr);
   S.db.collection('players').onSnapshot(s => { S.real = S.real || {}; S.real.players = intoMap(s); if (!S.demo) S.players = S.real.players; done('players'); }, onErr);
   S.db.collection('rounds').onSnapshot(s => { S.real = S.real || {}; S.real.rounds = intoMap(s); if (!S.demo) S.rounds = S.real.rounds; done('rounds'); }, onErr);
+  S.db.collection('media').onSnapshot(s => { S.real = S.real || {}; S.real.media = intoMap(s); if (!S.demo) S.media = S.real.media; render(); }, () => {});
   S.db.collection('scores').onSnapshot(s => {
     const next = intoMap(s);
     // keep un-flushed local edits on top of incoming data
@@ -514,14 +545,14 @@ function sampleTrip() {
 }
 function startDemo() {
   const t = sampleTrip();
-  S.demo = true; S.trip = t.trip; S.players = t.players; S.rounds = t.rounds; S.scores = t.scores;
+  S.demo = true; S.trip = t.trip; S.players = t.players; S.rounds = t.rounds; S.scores = t.scores; S.media = {};
   if (S.mode === 'loading' || S.mode === 'offline') S.mode = 'demo';
   S.boardRound = 'rs2'; S.scoreRound = 'rs2';
   render();
 }
 function exitDemo() {
   S.demo = false; const R = S.real || {};
-  S.trip = R.trip || { name: '', points: DEFAULT_POINTS }; S.players = R.players || {}; S.rounds = R.rounds || {}; S.scores = R.scores || {};
+  S.trip = R.trip || { name: '', points: DEFAULT_POINTS }; S.players = R.players || {}; S.rounds = R.rounds || {}; S.scores = R.scores || {}; S.media = R.media || {};
   S.boardRound = null; S.scoreRound = null; render();
 }
 
@@ -574,13 +605,15 @@ function viewBoard() {
     const sub = f.team ? x.unit.members.map(firstName).join(' · ') + (f.teamScore ? ` · hcp ${x.unit.hcp}` : '') : `hcp ${x.unit.hcp}`;
     return `<button class="lb-row" data-act="toggle" data-id="${key}" aria-expanded="${open}">
       <span class="pos num">${x.pos == null ? '' : (x.tied ? 'T' : '') + x.pos}</span>
-      <span class="who"><b>${esc(x.unit.name)}</b><small>${esc(sub)}</small></span>
+      <span class="who">${avatars(x.unit.members, 36)}<span><b>${esc(x.unit.name)}</b><small>${esc(sub)}</small></span></span>
       <span class="thru num">${x.thru === 18 ? 'F' : x.thru || '–'}</span>
       <span class="tile num ${t.cls} ${flash ? 'flash' : ''}">${esc(t.text)}<small>${esc(t.label)}</small></span>
     </button>${open ? `<div class="lb-card">${scorecard(r, x, c)}</div>` : ''}`;
   }).join('');
   const sides = (r.sides || []).filter(s => s.label);
+  const noPhoto = sortedPlayers().filter(p => !safeUrl(p.photo)).length;
   return `<div class="stack">${demoBanner()}
+    ${noPhoto && !S.demo ? `<div class="nudge"><span>${noPhoto} player${noPhoto > 1 ? 's' : ''} still need${noPhoto > 1 ? '' : 's'} a profile photo.</span><button class="btn sm primary" data-view="players">Add yours</button></div>` : ''}
     ${roundChips(r.id, 'boardRound')}
     <section class="board" aria-label="Leaderboard">
       <div class="board-top"><div><h3>${esc(r.name)} · ${esc(r.course || 'Course TBC')}</h3><div class="sub">${esc(f.name)}${r.date ? ' · ' + esc(r.date) : ''}${r.format === 'skins' && c.carry ? ` · ${c.carry} skin${c.carry > 1 ? 's' : ''} carrying` : ''}</div></div>${statusPill(r)}</div>
@@ -729,14 +762,14 @@ function viewTrip() {
   const { list, rounds } = tripStandings();
   if (!list.length) return welcome();
   const top = list.slice(0, 3);
-  const pod = top.map((x, i) => `<div class="p${i + 1}-wrap"><div class="pod p${i + 1}"><div class="rk num">${x.pos}</div><b>${esc(pname(x.pid))}</b><div class="pts num">${x.total}</div><div class="sub" style="color:inherit;opacity:.75">points</div></div></div>`).join('');
+  const pod = top.map((x, i) => `<div class="p${i + 1}-wrap"><div class="pod p${i + 1}"><div class="rk num">${x.pos}</div><div style="display:flex;justify-content:center;margin:6px 0">${avatar(x.pid, i === 0 ? 72 : 56)}</div><b>${esc(pname(x.pid))}</b><div class="pts num">${x.total}</div><div class="sub" style="color:inherit;opacity:.75">points</div></div></div>`).join('');
   const table = (S.trip.points && S.trip.points.length ? S.trip.points : DEFAULT_POINTS);
   return `<div class="stack">${demoBanner()}
     <div class="spread"><div><h2>Trip standings</h2><div class="sub">Points for where you finish in each round, plus side comps. Team rounds give every team member the team's points.</div></div></div>
     ${list.some(x => x.total) ? `<div class="podium">${pod}</div>` : ''}
     <section class="board"><div class="tbl-wrap"><table class="st num">
       <thead><tr><th>Pos</th><th>Player</th>${rounds.map(r => `<th title="${esc(r.course || '')}">${esc(r.name)}</th>`).join('')}<th>Sides</th><th>Total</th></tr></thead>
-      <tbody>${list.map(x => `<tr><td class="rk">${x.pos}</td><td>${esc(pname(x.pid))}</td>${rounds.map(r => { const v = x.by[r.id]; const prov = r.status !== 'final' && v != null; return `<td class="${prov ? 'prov' : ''}">${v == null ? '–' : v}</td>`; }).join('')}<td>${x.sides || '–'}</td><td class="total">${x.total}</td></tr>`).join('')}</tbody>
+      <tbody>${list.map(x => `<tr><td class="rk">${x.pos}</td><td><span class="who">${avatar(x.pid, 28)}<span>${esc(pname(x.pid))}</span></span></td>${rounds.map(r => { const v = x.by[r.id]; const prov = r.status !== 'final' && v != null; return `<td class="${prov ? 'prov' : ''}">${v == null ? '–' : v}</td>`; }).join('')}<td>${x.sides || '–'}</td><td class="total">${x.total}</td></tr>`).join('')}</tbody>
     </table></div></section>
     <p class="sub">Points by finishing position: ${table.map((p, i) => `${ordinal(i + 1)} ${p}`).join(' · ')}. Ties share the points. Italic numbers come from rounds still in play.</p>
   </div>`;
@@ -846,17 +879,18 @@ function render() {
   let selStart = null; try { selStart = focusId ? ae.selectionStart : null; } catch (e) {}
   const dirty = {}; main.querySelectorAll('[data-dirty]').forEach(el => { if (el.id) dirty[el.id] = el.value; });
   const scrollY = window.scrollY;
-  const views = { board: viewBoard, score: viewScore, cards: viewCards, trip: viewTrip, formats: viewFormats, setup: viewSetup };
+  const views = { board: viewBoard, score: viewScore, cards: viewCards, players: viewPlayers, photos: viewPhotos, trip: viewTrip, formats: viewFormats, setup: viewSetup };
   main.innerHTML = (views[S.view] || viewBoard)();
+  renderLightbox();
   for (const id in dirty) { const el = document.getElementById(id); if (el) { el.value = dirty[id]; el.dataset.dirty = '1'; } }
   if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus({ preventScroll: true }); try { if (selStart != null) el.setSelectionRange(selStart, selStart); } catch (e) {} } }
   if (Math.abs(window.scrollY - scrollY) > 2) window.scrollTo(0, scrollY);
 }
 
 /* ---------- routing ---------- */
-const VIEWS = ['board', 'score', 'cards', 'trip', 'formats', 'setup'];
+const VIEWS = ['board', 'score', 'cards', 'players', 'photos', 'trip', 'formats', 'setup'];
 function route() { const h = location.hash.slice(1); S.view = VIEWS.includes(h) ? h : 'board'; }
-function go(v) { if (location.hash.slice(1) !== v) location.hash = v; else { S.view = v; render(); } window.scrollTo(0, 0); }
+function go(v) { if (v !== 'players') S.profile = null; if (location.hash.slice(1) !== v) location.hash = v; else { S.view = v; render(); } window.scrollTo(0, 0); }
 window.addEventListener('hashchange', () => { route(); render(); });
 
 /* ---------- events ---------- */
@@ -868,6 +902,12 @@ document.addEventListener('click', e => {
   switch (act) {
     case 'boardRound': S.boardRound = id; render(); break;
     case 'cardRound': S.cardRound = id; render(); break;
+    case 'profile': S.profile = id || null; render(); window.scrollTo(0, 0); break;
+    case 'iam': LS.set('golf.me', id); toast('Got it. You\'re ' + firstName(id) + '.'); render(); break;
+    case 'mfilter': S.mediaFilter = id; render(); break;
+    case 'openMedia': if (id) { S.lightbox = id; S.confirmMedia = null; lbShown = null; render(); } break;
+    case 'closeMedia': S.lightbox = null; render(); break;
+    case 'delMedia': if (S.confirmMedia !== id) { S.confirmMedia = id; lbShown = null; render(); } else deleteMedia(id); break;
     case 'scoreRound': S.scoreRound = id; S.pickOpen = false; render(); break;
     case 'toggle': S.open[id] = !S.open[id]; render(); break;
     case 'demo': startDemo(); break;
@@ -922,6 +962,9 @@ function currentHole(r) { return S.hole[r.id] || 1; }
 document.addEventListener('input', e => { if (e.target.dataset.save) e.target.dataset.dirty = '1'; });
 document.addEventListener('change', e => {
   if (e.target.id === 'cardWho') { S.cardPlayer = e.target.value; render(); return; }
+  if (e.target.id === 'mBy') { LS.set('golf.me', e.target.value); render(); return; }
+  if (e.target.id === 'mediaIn') { const fs = e.target.files; if (fs && fs.length) uploadMedia(fs); return; }
+  if (e.target.id === 'photoIn') { const f = e.target.files?.[0]; if (f) setProfilePhoto(e.target.dataset.pid, f); return; }
   const el = e.target; const k = el.dataset.save; if (!k) return;
   delete el.dataset.dirty;
   const id = el.dataset.id; const r = S.rounds[id];
@@ -930,6 +973,7 @@ document.addEventListener('change', e => {
     case 'tripName': setDoc('trip/main', { ...S.trip, name: el.value.trim() }); break;
     case 'points': { const pts = el.value.split(/[,\s]+/).map(Number).filter(n => isFinite(n) && n >= 0); if (pts.length) setDoc('trip/main', { ...S.trip, points: pts }); break; }
     case 'pname': if (el.value.trim()) updateDoc('players/' + id, { name: el.value.trim() }); break;
+    case 'pfield': updateDoc('players/' + id, { [el.dataset.f]: el.value.trim().slice(0, 160) }); break;
     case 'phcp': updateDoc('players/' + id, { hcp: num(el.value) ?? 0 }); break;
     case 'rfield': updateDoc('rounds/' + id, { [el.dataset.f]: el.value }); break;
     case 'par': case 'si': { const arr = [...course(r)[k]]; arr[Number(el.dataset.i)] = Number(el.value) || 0; updateDoc('rounds/' + id, { [k]: arr }); break; }
@@ -958,6 +1002,183 @@ document.addEventListener('submit', e => {
   setDoc('players/' + uid('p'), { name, hcp });
   $('#newPName').value = ''; $('#newPHcp').value = ''; $('#newPName').focus();
 });
+
+/* ---------- players, photos & media ---------- */
+function safeUrl(u) { u = String(u || ''); return /^(data:image\/(jpeg|png|webp);base64,|data:video\/|https:\/\/|blob:|\/_blob\/)/.test(u) ? u : ''; }
+function initials(pid) { return pname(pid).split(/\s+/).map(w => w[0] || '').join('').slice(0, 2); }
+function avatar(pid, size = 32) {
+  const u = safeUrl(S.players[pid]?.photo); const st = `width:${size}px;height:${size}px;font-size:${Math.round(size * .42)}px`;
+  return u ? `<img class="av" src="${esc(u)}" alt="" style="${st}" loading="lazy">` : `<span class="av" style="${st}" aria-hidden="true">${esc(initials(pid))}</span>`;
+}
+function avatars(ids, size) { return `<span class="avs">${ids.slice(0, 4).map(id => avatar(id, size)).join('')}</span>`; }
+const me = () => { const m = LS.get('golf.me', ''); return S.players[m] ? m : ''; };
+
+function loadImage(file) { return new Promise((res, rej) => { const u = URL.createObjectURL(file); const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('image')); i.src = u; }); }
+function toBlob(c, q) { return new Promise(r => c.toBlob(r, 'image/jpeg', q)); }
+const toDataURL = b => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); });
+async function resizeImage(file, max, q = .82, square = false) {
+  const img = await loadImage(file); let w = img.naturalWidth, h = img.naturalHeight, sx = 0, sy = 0, sw = w, sh = h;
+  if (square) { const m = Math.min(w, h); sx = (w - m) / 2; sy = (h - m) / 2; sw = sh = m; w = h = Math.min(max, m); }
+  else { const k = Math.min(1, max / Math.max(w, h)); w = Math.round(w * k); h = Math.round(h * k); }
+  const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+  return toBlob(c, q);
+}
+function videoThumb(file) {
+  return new Promise(res => {
+    const v = document.createElement('video'); let done = false; const fin = x => { if (!done) { done = true; res(x); } };
+    v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(file);
+    v.onloadeddata = () => { try { v.currentTime = Math.min(.5, (v.duration || 1) / 2); } catch (e) { fin(null); } };
+    v.onseeked = async () => { try { const k = Math.min(1, 480 / Math.max(v.videoWidth, v.videoHeight)); const c = document.createElement('canvas'); c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k); c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); fin(await toDataURL(await toBlob(c, .75))); } catch (e) { fin(null); } };
+    v.onerror = () => fin(null); setTimeout(() => fin(null), 8000);
+  });
+}
+const MAX_VIDEO = () => S.backend === 'firebase' ? 200 * 1048576 : 20 * 1048576;
+async function storeFile(blob, kind) {
+  if (S.demo) return { url: URL.createObjectURL(blob) };
+  if (S.backend === 'firebase') {
+    try {
+      const path = 'media/' + uid('m') + (kind === 'video' ? '' : '.jpg');
+      const ref = firebase.storage().ref(path); await ref.put(blob, { contentType: blob.type || (kind === 'video' ? 'video/mp4' : 'image/jpeg') });
+      return { url: await ref.getDownloadURL(), path };
+    } catch (e) {
+      if (kind === 'image' && blob.size < 700000) return { url: await toDataURL(blob) };
+      throw { code: 'no_storage' };
+    }
+  }
+  const assets = await window.claude.use('assets'); if (!assets) throw { code: 'not_granted' };
+  const r = await assets.upload(blob); return { url: r.url, assetId: r.id };
+}
+function uploadErr(e) {
+  const c = e?.code;
+  if (c === 'no_storage') return 'Videos need Firebase Storage switched on. Photos still work.';
+  if (c === 'too_large') return 'That file is too big. Try a shorter clip.';
+  if (c === 'not_granted' || c === 'not_uploader') return 'You need edit access to post photos. Ask the organiser.';
+  if (c === 'unsupported_type') return 'That file type can\'t be posted. Try a JPEG photo or MP4 video.';
+  if (c === 'quota_or_state' || c === 'quota_exceeded') return 'The trip album is full.';
+  return 'Upload failed. Check your signal and try again.';
+}
+async function uploadMedia(files) {
+  const by = me(); const caption = ($('#mCaption')?.value || '').trim().slice(0, 200); const roundId = $('#mRound')?.value || '';
+  if (!by) { toast('Pick who\'s posting first.'); return; }
+  let n = 0; const list = [...files];
+  for (const f of list) {
+    n++; S.uploading = `Uploading ${n} of ${list.length}…`; render();
+    try {
+      const isVideo = (f.type || '').startsWith('video/');
+      if (isVideo && f.size > MAX_VIDEO()) { toast(`${f.name} is over ${Math.round(MAX_VIDEO() / 1048576)} MB. Trim it and try again.`); continue; }
+      let blob = f, thumb;
+      if (isVideo) thumb = await videoThumb(f);
+      else { blob = await resizeImage(f, 1600, .82); thumb = await toDataURL(await resizeImage(f, 420, .72, true)); }
+      const st = await storeFile(blob, isVideo ? 'video' : 'image');
+      const doc = { type: isVideo ? 'video' : 'image', url: st.url, thumb: thumb || '', caption, by, roundId, createdAt: Date.now() };
+      if (st.assetId) doc.assetId = st.assetId; if (st.path) doc.path = st.path;
+      const id = uid('m');
+      if (S.demo) { S.media[id] = { id, ...doc }; } else await setDoc('media/' + id, doc);
+    } catch (e) { toast(e?.message === 'image' ? `Couldn't read ${f.name}. Try a JPEG.` : uploadErr(e)); }
+  }
+  S.uploading = ''; const c = $('#mCaption'); if (c) c.value = '';
+  toast(list.length > 1 ? 'Posted to the album.' : 'Posted.'); render();
+}
+async function setProfilePhoto(pid, file) {
+  try { S.uploading = 'Saving photo…'; render(); const blob = await resizeImage(file, 400, .8, true); const url = await toDataURL(blob); await updateDoc('players/' + pid, { photo: url }); toast('Looking sharp.'); }
+  catch (e) { toast(e?.message === 'image' ? 'Couldn\'t read that photo. Try a JPEG.' : writeErr(e)); }
+  S.uploading = ''; render();
+}
+const sortedMedia = () => Object.values(S.media).filter(m => safeUrl(m.url)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+function thumbs(list) {
+  return `<div class="mgrid">${list.map(m => `<button class="mthumb" data-act="openMedia" data-id="${esc(m.id)}" aria-label="${esc(m.caption || (m.type === 'video' ? 'Video' : 'Photo'))}">${safeUrl(m.thumb) || m.type !== 'video' ? `<img src="${esc(safeUrl(m.thumb) || safeUrl(m.url))}" alt="" loading="lazy">` : ''}${m.type === 'video' ? '<span class="play">▶ Video</span>' : ''}</button>`).join('')}</div>`;
+}
+
+function viewPlayers() {
+  if (S.profile && S.players[S.profile]) return viewProfile(S.profile);
+  const ps = sortedPlayers(); if (!ps.length) return welcome();
+  const { list } = tripStandings(); const st = Object.fromEntries(list.map(x => [x.pid, x]));
+  const missing = ps.filter(p => !safeUrl(p.photo)).length;
+  return `<div class="stack">${demoBanner()}
+    <div><h2>The players</h2><div class="sub">${missing ? `${missing} still need${missing === 1 ? 's' : ''} a photo. Tap your name to add one.` : 'Everyone has a photo. Good lads.'}</div></div>
+    <div class="pgrid">${ps.map(p => `<button class="pcard" data-act="profile" data-id="${p.id}">
+      ${avatar(p.id, 84)}<b>${esc(p.name)}</b><span class="nick">${p.nickname ? '“' + esc(p.nickname) + '”' : ''}</span>
+      <span class="stat num">Hcp ${esc(p.hcp ?? 0)} · ${st[p.id] ? ordinal(st[p.id].pos) : '–'}</span>
+      ${safeUrl(p.photo) ? '' : '<span class="need">Needs a photo</span>'}</button>`).join('')}</div></div>`;
+}
+function viewProfile(pid) {
+  const p = S.players[pid]; const { list } = tripStandings(); const st = list.find(x => x.pid === pid);
+  const ro = !S.canWrite && !S.demo;
+  const results = sortedRounds().map(r => { const c = compute(r); const x = c.rows.find(x => x.unit.members.includes(pid)); if (!x) return ''; const t = scoreTile(r, x);
+    return `<div class="spread" style="align-items:center;padding:8px 0;border-bottom:1px solid var(--line)"><span><b>${esc(r.name)} · ${esc(r.course || '')}</b><br><span class="sub">${esc(fmt(r).name)}${fmt(r).team ? ' with ' + esc(x.unit.members.filter(m => m !== pid).map(firstName).join(', ')) : ''}</span></span>
+      <span class="row" style="flex-wrap:nowrap"><span class="thru">${x.pos ? (x.tied ? 'T' : '') + ordinal(x.pos) : (x.thru ? '' : 'Not started')}</span><span class="tile num ${t.cls}" style="min-width:64px">${esc(t.text)}<small>${esc(t.label)}</small></span></span></div>`; }).join('');
+  const mine = sortedMedia().filter(m => m.by === pid);
+  const isMe = me() === pid;
+  return `<div class="stack">${demoBanner()}
+    <div><button class="btn sm" data-act="profile" data-id="">← All players</button></div>
+    <section class="panel stack">
+      <div class="profile-hero">${avatar(pid, 120)}
+        <div class="stack" style="gap:6px;min-width:0">
+          <h2 style="font-size:34px">${esc(p.name)}</h2>
+          ${p.nickname ? `<div class="sub" style="font-style:italic">“${esc(p.nickname)}”</div>` : ''}
+          <div class="row"><span class="status">Hcp ${esc(p.hcp ?? 0)}</span>${st ? `<span class="status final">${ordinal(st.pos)} on the trip · ${st.total} pts</span>` : ''}</div>
+          ${ro ? '' : `<div class="row" style="margin-top:6px">
+            <label class="btn sm primary filebtn">${safeUrl(p.photo) ? 'Change photo' : 'Add photo'}<input type="file" accept="image/*" id="photoIn" data-pid="${pid}"></label>
+            ${isMe ? '<span class="sub">This is you</span>' : `<button class="btn sm" data-act="iam" data-id="${pid}">This is me</button>`}</div>`}
+        </div>
+      </div>
+      ${p.bio ? `<p style="margin:0;max-width:60ch">${esc(p.bio)}</p>` : ''}
+    </section>
+    ${ro ? '' : `<section class="panel stack"><h3>About</h3><div class="grid2">
+      <div class="field"><label for="pnick_${pid}">Nickname</label><input class="inp" id="pnick_${pid}" data-save="pfield" data-f="nickname" data-id="${pid}" value="${esc(p.nickname || '')}" maxlength="40" placeholder="The Shank Redemption"></div>
+      <div class="field"><label for="pbio_${pid}">Claim to fame</label><input class="inp" id="pbio_${pid}" data-save="pfield" data-f="bio" data-id="${pid}" value="${esc(p.bio || '')}" maxlength="160" placeholder="Hole in one at the 2019 Christmas comp"></div>
+    </div></section>`}
+    <section class="panel"><h3>This trip</h3><div style="margin-top:6px">${results || '<div class="sub">Not in any rounds yet.</div>'}</div></section>
+    ${mine.length ? `<section class="stack" style="gap:10px"><h3>Posted by ${esc(firstName(pid))}</h3>${thumbs(mine)}</section>` : ''}
+  </div>`;
+}
+
+function viewPhotos() {
+  const ps = sortedPlayers(); const all = sortedMedia(); const ro = !S.canWrite && !S.demo;
+  const f = S.mediaFilter || ''; const shown = f ? all.filter(m => m.roundId === f) : all;
+  const live = sortedRounds().find(r => r.status === 'live');
+  const cap = Math.round(MAX_VIDEO() / 1048576);
+  return `<div class="stack">${demoBanner()}
+    <div><h2>Photos &amp; videos</h2><div class="sub">${all.length} posted from the weekend.</div></div>
+    ${ro ? '<div class="banner"><span>You can look, but only people with edit access can post. Ask the organiser.</span></div>' : `
+    <section class="panel stack" style="gap:12px">
+      <div class="grid2">
+        <div class="field"><label for="mBy">Posting as</label><select class="inp" id="mBy"><option value="">Pick your name…</option>${ps.map(p => `<option value="${p.id}" ${p.id === me() ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+        <div class="field"><label for="mRound">Round</label><select class="inp" id="mRound"><option value="">Off the course</option>${sortedRounds().map(r => `<option value="${r.id}" ${live && live.id === r.id ? 'selected' : ''}>${esc(r.name)} · ${esc(r.course || '')}</option>`).join('')}</select></div>
+        <div class="field"><label for="mCaption">Caption (optional)</label><input class="inp" id="mCaption" maxlength="200" placeholder="Robbo finds the beach on 16"></div>
+      </div>
+      <div class="row"><label class="btn primary filebtn">${S.uploading ? esc(S.uploading) : 'Add photos or videos'}<input type="file" id="mediaIn" accept="image/*,video/*" multiple ${S.uploading ? 'disabled' : ''}></label>
+      <span class="sub">Videos up to ${cap} MB, so keep clips short.</span></div>
+    </section>`}
+    ${all.length ? `<div class="chips" role="group" aria-label="Filter"><button class="pick" data-act="mfilter" data-id="" aria-pressed="${!f}">All</button>${sortedRounds().map(r => `<button class="pick" data-act="mfilter" data-id="${r.id}" aria-pressed="${f === r.id}">${esc(r.course || r.name)}</button>`).join('')}</div>` : ''}
+    ${shown.length ? thumbs(shown) : `<div class="empty panel">${all.length ? 'Nothing from this round yet.' : 'No photos yet. The first shank caught on camera goes here.'}</div>`}
+  </div>`;
+}
+let lbShown = null;
+function renderLightbox() {
+  const box = $('#lightbox'); const id = S.lightbox; const m = id && S.media[id];
+  if (!m) { if (lbShown) { box.innerHTML = ''; lbShown = null; } return; }
+  if (lbShown === id) return; lbShown = id;
+  const list = sortedMedia(); const i = list.findIndex(x => x.id === id);
+  const canDel = S.demo || S.canEdit || (m.by && m.by === me());
+  const url = esc(safeUrl(m.url)); const r = S.rounds[m.roundId];
+  box.innerHTML = `<div class="lightbox" role="dialog" aria-modal="true" aria-label="Photo">
+    <div class="bar"><span>${m.by ? avatar(m.by, 28) : ''} <b>${esc(m.by ? pname(m.by) : '')}</b> <small>${r ? esc(r.course || r.name) : ''}</small></span>
+      <span class="row">${canDel ? `<button class="lbb del" data-act="delMedia" data-id="${esc(id)}">${S.confirmMedia === id ? 'Tap to confirm' : 'Delete'}</button>` : ''}<button class="lbb" data-act="closeMedia">Close</button></span></div>
+    <div class="stage">${m.type === 'video' ? `<video src="${url}" controls playsinline autoplay ${safeUrl(m.thumb) ? `poster="${esc(safeUrl(m.thumb))}"` : ''}></video>` : `<img src="${url}" alt="${esc(m.caption || '')}">`}</div>
+    <div class="bar"><button class="lbb" data-act="openMedia" data-id="${esc(list[i - 1]?.id || '')}" ${i > 0 ? '' : 'disabled style="opacity:.3"'}>← Newer</button><span style="flex:1;text-align:center">${esc(m.caption || '')}</span><button class="lbb" data-act="openMedia" data-id="${esc(list[i + 1]?.id || '')}" ${i < list.length - 1 ? '' : 'disabled style="opacity:.3"'}>Older →</button></div>
+  </div>`;
+}
+async function deleteMedia(id) {
+  const m = S.media[id]; if (!m) return;
+  if (S.demo) { delete S.media[id]; }
+  else {
+    await delDoc('media/' + id);
+    try { if (m.path && S.backend === 'firebase') await firebase.storage().ref(m.path).delete(); if (m.assetId && S.canEdit) { const a = await window.claude.use('assets'); await a?.delete(m.assetId); } } catch (e) {}
+  }
+  S.lightbox = null; S.confirmMedia = null; render(); toast('Deleted.');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.lightbox) { S.lightbox = null; render(); } });
 
 /* ---------- organiser PIN (web version) ---------- */
 async function sha(t) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('golftrip:' + t)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
