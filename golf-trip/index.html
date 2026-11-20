@@ -130,6 +130,7 @@ h3{font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-si
 .hrow .ed{font-family:var(--f-body);background:rgba(0,0,0,.25);color:var(--gilt);border:1px solid rgba(217,178,92,.4);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;text-shadow:none}
 .spoon{font-family:var(--f-body);font-size:12px;color:#e9d9b4;opacity:.85}
 @media (max-width:520px){.hrow{grid-template-columns:58px minmax(0,1fr) auto}.hrow .yr{font-size:19px}.hrow .nm{font-size:16px}}
+.resume{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--green);color:var(--on-green);border-radius:12px;padding:10px 14px;margin-bottom:18px;font-size:14px;box-shadow:var(--shadow)}
 .nudge{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border:1.5px dashed var(--green-2);border-radius:12px;padding:10px 14px;font-size:13px;font-weight:600}
 .who b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .who small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -658,7 +659,7 @@ function viewBoard() {
     ${noPhoto && !S.demo ? `<div class="nudge"><span>${noPhoto} player${noPhoto > 1 ? 's' : ''} still need${noPhoto > 1 ? '' : 's'} a profile photo.</span><button class="btn sm primary" data-view="players">Add yours</button></div>` : ''}
     ${roundChips(r.id, 'boardRound')}
     <section class="board" aria-label="Leaderboard">
-      <div class="board-top"><div><h3>${esc(r.name)} · ${esc(r.course || 'Course TBC')}</h3><div class="sub">${esc(f.name)}${r.date ? ' · ' + esc(r.date) : ''}${r.format === 'skins' && c.carry ? ` · ${c.carry} skin${c.carry > 1 ? 's' : ''} carrying` : ''}</div></div>${statusPill(r)}</div>
+      <div class="board-top"><div><h3>${esc(r.name)} · ${esc(r.course || 'Course TBC')}</h3><div class="sub">${esc(f.name)}${r.date ? ' · ' + esc(r.date) : ''}${r.format === 'skins' && c.carry ? ` · ${c.carry} skin${c.carry > 1 ? 's' : ''} carrying` : ''}</div></div><div class="row">${statusPill(r)}${S.canEdit || S.demo ? (r.status === 'final' ? `<button class="btn sm" data-act="setStatus" data-id="${r.id}" data-s="live">Reopen</button>` : r.status === 'live' ? `<button class="btn sm flagb" data-act="setStatus" data-id="${r.id}" data-s="final">Mark Final</button>` : `<button class="btn sm flagb" data-act="setStatus" data-id="${r.id}" data-s="live">Start round</button>`) : ''}</div></div>
       <div class="lb-cols"><span>Pos</span><span>${f.team ? 'Team' : 'Player'}</span><span>Thru</span><span>${f.unit === 'nett' ? 'To par' : esc(f.unit)}</span></div>
       ${rows || `<div class="empty">${f.team ? 'No teams yet. The organiser sets them up under Setup.' : 'No players in this round yet.'}</div>`}
     </section>
@@ -743,27 +744,40 @@ function welcome() {
   </section>${formatsGrid()}</div>`;
 }
 
+/* ---------- on-course session: tee off, resume, finish ---------- */
+function getActive() {
+  const a = S.active !== undefined ? S.active : LS.get('golf.active', null);
+  if (!a || !S.rounds[a.roundId] || !Array.isArray(a.keys)) return null;
+  const ents = entities(S.rounds[a.roundId]); const keys = a.keys.filter(k => ents.some(e => e.key === k));
+  return keys.length ? { ...a, keys } : null;
+}
+function setActive(a) { S.active = a; LS.set('golf.active', a); }
+function firstOpenHole(r, keys) { for (let h = 1; h <= 18; h++) if (keys.some(k => gv(r, k, h) == null)) return h; return 18; }
+function resumeBar() {
+  const a = getActive(); if (!a || S.view === 'score') return '';
+  const r = S.rounds[a.roundId];
+  return `<div class="resume"><span><span class="live-dot" style="display:inline-block;margin-right:8px"></span><b>On course</b> · ${esc(r.course || r.name)} · Hole ${a.hole || 1}</span><button class="btn sm flagb" data-view="score">Resume scoring</button></div>`;
+}
+
 function viewScore() {
   const rs = sortedRounds(); if (!rs.length) return welcome();
-  S.scoreRound = pickRound(S.scoreRound);
-  const r = S.rounds[S.scoreRound]; const f = fmt(r); const C = course(r);
-  const ents = entities(r);
-  const selKey = 'golf.sel.' + r.id;
-  let sel = (LS.get(selKey, null) || S['sel_' + r.id] || []).filter(k => ents.some(e => e.key === k));
-  const pickerOpen = !sel.length || S.pickOpen;
   const ro = !S.canWrite && !S.demo;
-  let hole = S.hole[r.id];
-  if (!hole) { hole = 1; for (let h = 1; h <= 18; h++) { if (sel.some(k => gv(r, k, h) == null)) { hole = h; break; } } }
-  if (sel.length) S.hole[r.id] = hole;
+  const a = getActive();
+  if (S.finished && !a) return finishedScreen();
+  if (!a) return startScreen(ro);
+  const r = S.rounds[a.roundId]; S.scoreRound = r.id;
+  if (S.finishing) return finishScreen(r, a);
+  const f = fmt(r); const C = course(r); const ents = entities(r); const sel = a.keys;
+  const hole = a.hole || firstOpenHole(r, sel); S.hole[r.id] = hole;
   const par = C.par[hole - 1], si = C.si[hole - 1];
-  const holesNav = [...Array(18)].map((_, i) => { const h = i + 1; const done = sel.length && sel.every(k => gv(r, k, h) != null); return `<button class="hole-btn num ${done ? 'done' : ''}" data-act="hole" data-id="${h}" aria-current="${h === hole}">${h}</button>`; }).join('');
+  const holesNav = [...Array(18)].map((_, i) => { const h = i + 1; const done = sel.every(k => gv(r, k, h) != null); return `<button class="hole-btn num ${done ? 'done' : ''}" data-act="hole" data-id="${h}" aria-current="${h === hole}">${h}</button>`; }).join('');
   const entries = sel.map(k => {
     const e = ents.find(x => x.key === k); const g = gv(r, k, hole); const s = shots(e.hcp, si);
     let res = '';
     if (g === 'P') res = 'Picked up · 0 pts';
     else if (g != null) {
       const d = g - par; const names = { '-3': 'Albatross', '-2': 'Eagle', '-1': 'Birdie', '0': 'Par', '1': 'Bogey', '2': 'Double' };
-      res = (g === 1 ? 'Hole in one' : names[d] || (d > 0 ? '+' + d : d)) + (f.pickup || r.format === 'stroke' || f.teamScore ? ` · nett ${g - s}` : '');
+      res = (g === 1 ? 'Hole in one' : names[d] || (d > 0 ? '+' + d : d)) + ` · nett ${g - s}`;
       if (r.format === 'stableford' || r.format === 'fourbbb' || r.format === 'skins') res += ` · ${stbl(par, g, s)} pts`;
     }
     const dots = s > 0 ? `<span class="dots" title="${s} shot${s > 1 ? 's' : ''}">${'<i></i>'.repeat(Math.min(s, 3))}</span>` : '';
@@ -777,17 +791,15 @@ function viewScore() {
         ${f.pickup ? `<button class="pu" data-act="pickup" data-id="${esc(k)}" aria-pressed="${g === 'P'}" ${ro ? 'disabled' : ''}>Pick up</button>` : ''}
       </div></div>`;
   }).join('');
+  const holeDone = sel.every(k => gv(r, k, hole) != null);
   return `<div class="stack">${demoBanner()}
-    ${roundChips(r.id, 'scoreRound')}
     ${ro ? '<div class="banner"><span>You can follow along, but only people with edit access can enter scores. Ask the organiser.</span></div>' : ''}
     <section class="panel">
-      <div class="spread"><div><h3>Who are you scoring?</h3><div class="sub">${f.teamScore ? 'Ambrose has one score per team.' : 'Pick everyone in your group. One person can keep the card for the whole group.'}</div></div>
-      ${!pickerOpen ? `<button class="btn sm" data-act="pickOpen">Change</button>` : ''}</div>
-      ${pickerOpen ? `<div class="picker" style="margin-top:12px">${ents.map(e => `<button class="pick" data-act="pick" data-id="${esc(e.key)}" aria-pressed="${sel.includes(e.key)}">${esc(e.name)}</button>`).join('') || '<span class="sub">Nobody is in this round yet.</span>'}</div>
-        ${sel.length ? '<div style="margin-top:12px"><button class="btn primary sm" data-act="pickDone">Done</button></div>' : ''}`
-      : `<div class="sub" style="margin-top:6px">${sel.map(k => esc(ents.find(e => e.key === k)?.name)).join(', ')}</div>`}
+      <div class="spread" style="align-items:center"><div style="min-width:0"><h3>${esc(r.name)} · ${esc(r.course || 'Course TBC')}</h3>
+        <div class="sub">${esc(f.name)} · Scoring for ${sel.map(k => esc(ents.find(e => e.key === k)?.name)).join(', ')}</div></div>
+        <div class="row"><button class="btn sm" data-act="pickOpen">${S.pickOpen ? 'Done' : 'Edit group'}</button><button class="btn sm" data-act="finishAsk">Finish round</button></div></div>
+      ${S.pickOpen ? `<div class="picker" style="margin-top:12px">${ents.map(e => `<button class="pick" data-act="pick" data-id="${esc(e.key)}" aria-pressed="${sel.includes(e.key)}">${esc(e.name)}</button>`).join('')}</div>` : ''}
     </section>
-    ${sel.length ? `
     <div class="holes" role="group" aria-label="Holes">${holesNav}</div>
     <div class="hole-card">
       <div class="big num"><small>Hole</small>${hole}</div>
@@ -795,9 +807,57 @@ function viewScore() {
     </div>
     <section class="panel" style="padding-block:4px">${entries}</section>
     <div class="navrow"><button class="btn" data-act="hole" data-id="${Math.max(1, hole - 1)}" ${hole === 1 ? 'disabled' : ''}>← Hole ${Math.max(1, hole - 1)}</button>
-      <button class="btn primary" data-act="hole" data-id="${Math.min(18, hole + 1)}" ${hole === 18 ? 'disabled' : ''}>Hole ${Math.min(18, hole + 1)} →</button></div>
-    <p class="sub">Tap the score box to start at par, then use − and +. Scores save as you go and show on the live board for everyone. Yellow dots mean a handicap shot on this hole.</p>` : ''}
+      ${hole === 18 ? `<button class="btn ${holeDone ? 'flagb' : 'primary'}" data-act="finishAsk">Finish round →</button>` : `<button class="btn primary" data-act="hole" data-id="${hole + 1}">Hole ${hole + 1} →</button>`}</div>
+    <p class="sub">Tap the score box to start at par, then use − and +. Scores save as you go and show on the live board for everyone. Your round stays open on this phone until you finish it, even if you close the app.</p>
   </div>`;
+}
+
+function startScreen(ro) {
+  const live = sortedRounds().filter(r => r.status !== 'final');
+  const pool = live.length ? live : sortedRounds();
+  S.startRound = S.startRound && S.rounds[S.startRound] ? S.startRound : (pool.find(r => r.status === 'live') || pool[0]).id;
+  const r = S.rounds[S.startRound]; const ents = entities(r); const f = fmt(r);
+  const sel = (S.startSel || []).filter(k => ents.some(e => e.key === k));
+  const meId = me(); const mine = meId && ents.find(e => e.key === meId || units(r).some(u => u.id === e.key && u.members.includes(meId)));
+  return `<div class="stack">${demoBanner()}
+    <div><h2>Tee off</h2><div class="sub">Start your group's round. One person keeps the card for the group.</div></div>
+    ${ro ? '<div class="banner"><span>You can follow along, but only people with edit access can enter scores. Ask the organiser.</span></div>' : ''}
+    <section class="stack" style="gap:10px"><h3>1. Which round?</h3>${roundChips(r.id, 'startRound')}</section>
+    <section class="panel stack" style="gap:12px">
+      <div><h3>2. Who's in your group?</h3><div class="sub">${f.teamScore ? 'Ambrose has one score per team. Pick your team.' : 'Pick everyone you\'re keeping score for.'}</div></div>
+      <div class="picker">${ents.map(e => `<button class="pick" data-act="startPick" data-id="${esc(e.key)}" aria-pressed="${sel.includes(e.key)}">${esc(e.name)}</button>`).join('') || '<span class="sub">Nobody is in this round yet. The organiser sets it up under Setup.</span>'}</div>
+      ${mine && !sel.length ? `<div><button class="btn sm" data-act="startPick" data-id="${esc(mine.key)}">Add me (${esc(mine.name)})</button></div>` : ''}
+    </section>
+    <button class="btn primary" style="padding:16px;font-size:17px" data-act="teeOff" ${sel.length && !ro ? '' : 'disabled'}>${sel.length ? `Tee off with ${sel.length} ${f.teamScore ? (sel.length > 1 ? 'teams' : 'team') : (sel.length > 1 ? 'players' : 'player')}` : 'Pick your group to tee off'}</button>
+  </div>`;
+}
+
+function finishScreen(r, a) {
+  const C = course(r); const ents = entities(r); const f = fmt(r);
+  const rows = a.keys.map(k => {
+    const e = ents.find(x => x.key === k); let n = 0, gross = 0, pts = 0, pu = 0, missing = [];
+    for (let h = 1; h <= 18; h++) { const g = gv(r, k, h); if (g == null) { missing.push(h); continue; } n++; if (g === 'P') pu++; else gross += g; pts += stbl(C.par[h - 1], g, shots(e.hcp, C.si[h - 1])); }
+    return { e, n, gross, pts, pu, missing };
+  });
+  const gaps = rows.some(x => x.missing.length);
+  const c = compute(r); const allIn = c.rows.length && c.rows.every(x => x.thru === 18);
+  const can = S.canEdit || S.demo;
+  return `<div class="stack">${demoBanner()}
+    <div><h2>Finish round</h2><div class="sub">${esc(r.name)} · ${esc(r.course || '')}</div></div>
+    <section class="board"><div class="tbl-wrap"><table class="st num"><thead><tr><th style="text-align:left">${f.teamScore ? 'Team' : 'Player'}</th><th>Holes</th><th>Gross</th><th>${f.unit === 'pts' || r.format === 'skins' ? 'Pts' : 'Nett'}</th></tr></thead>
+      <tbody>${rows.map(x => `<tr><td style="text-align:left">${esc(x.e.name)}${x.missing.length ? `<br><span class="sub" style="color:var(--red)">Missing ${x.missing.length > 6 ? x.missing.length + ' holes' : 'hole ' + x.missing.join(', ')}</span>` : ''}</td><td>${x.n}</td><td>${x.gross}${x.pu ? `<span class="sub"> +${x.pu} P</span>` : ''}</td><td class="total">${!x.n ? '–' : f.unit === 'nett' ? (x.n === 18 ? x.gross - x.e.hcp : '–') : x.pts}</td></tr>`).join('')}</tbody></table></div></section>
+    ${gaps ? '<div class="banner"><span>Some holes have no score. Go back and fill them in, or finish anyway and fix them later from Enter scores.</span></div>' : ''}
+    <div class="navrow"><button class="btn" data-act="finishCancel">Keep scoring</button><button class="btn primary" data-act="finishDo">Finish round</button></div>
+    ${can ? `<label style="display:flex;gap:10px;align-items:flex-start;font-weight:600"><input type="checkbox" id="finalIn" style="margin-top:3px" ${allIn ? 'checked' : ''}><span>Also mark ${esc(r.name)} as Final for everyone${allIn ? '' : ' (not every group has finished yet)'}</span></label>` : '<p class="sub">The organiser marks the round as Final once every group is in. That\'s when trip points and handicaps update.</p>'}
+  </div>`;
+}
+function finishedScreen() {
+  const r = S.rounds[S.finished]; if (!r) { S.finished = null; return viewScore(); }
+  return `<div class="stack">${demoBanner()}
+    <section class="panel stack" style="text-align:center;align-items:center;padding:28px 16px">
+      <h2>Round finished</h2><div class="sub">${esc(r.name)} · ${esc(r.course || '')}${r.status === 'final' ? ' · Final' : ''}</div>
+      <div class="row" style="justify-content:center"><button class="btn primary" data-act="seeCards" data-id="${r.id}">See the scorecards</button><button class="btn" data-view="board">Live board</button><button class="btn" data-act="newRound">Start another round</button></div>
+    </section></div>`;
 }
 
 function viewTrip() {
@@ -924,7 +984,7 @@ function render() {
   const dirty = {}; main.querySelectorAll('[data-dirty]').forEach(el => { if (el.id) dirty[el.id] = el.value; });
   const scrollY = window.scrollY;
   const views = { board: viewBoard, score: viewScore, cards: viewCards, players: viewPlayers, photos: viewPhotos, trip: viewTrip, winners: viewWinners, handicaps: viewHandicaps, formats: viewFormats, setup: viewSetup };
-  main.innerHTML = (views[S.view] || viewBoard)();
+  main.innerHTML = resumeBar() + (views[S.view] || viewBoard)();
   renderLightbox();
   for (const id in dirty) { const el = document.getElementById(id); if (el) { el.value = dirty[id]; el.dataset.dirty = '1'; } }
   if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus({ preventScroll: true }); try { if (selStart != null) el.setSelectionRange(selStart, selStart); } catch (e) {} } }
@@ -933,7 +993,7 @@ function render() {
 
 /* ---------- routing ---------- */
 const VIEWS = ['board', 'score', 'cards', 'players', 'photos', 'trip', 'winners', 'handicaps', 'formats', 'setup'];
-function route() { const h = location.hash.slice(1); S.view = VIEWS.includes(h) ? h : 'board'; }
+function route() { const h = location.hash.slice(1); S.view = VIEWS.includes(h) ? h : (LS.get('golf.active', null) ? 'score' : 'board'); }
 function go(v) { if (v !== 'players') S.profile = null; if (location.hash.slice(1) !== v) location.hash = v; else { S.view = v; render(); } window.scrollTo(0, 0); }
 window.addEventListener('hashchange', () => { route(); render(); });
 
@@ -960,20 +1020,33 @@ document.addEventListener('click', e => {
     case 'openMedia': if (id) { S.lightbox = id; S.confirmMedia = null; lbShown = null; render(); } break;
     case 'closeMedia': S.lightbox = null; render(); break;
     case 'delMedia': if (S.confirmMedia !== id) { S.confirmMedia = id; lbShown = null; render(); } else deleteMedia(id); break;
-    case 'scoreRound': S.scoreRound = id; S.pickOpen = false; render(); break;
     case 'toggle': S.open[id] = !S.open[id]; render(); break;
     case 'demo': startDemo(); break;
     case 'exitDemo': exitDemo(); break;
-    case 'pick': {
-      const k = 'golf.sel.' + S.scoreRound; let sel = LS.get(k, null) || S['sel_' + S.scoreRound] || [];
-      sel = sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id];
-      LS.set(k, sel); S['sel_' + S.scoreRound] = sel; S.pickOpen = true; delete S.hole[S.scoreRound]; render(); break;
+    case 'pick': { const a = getActive(); if (!a) break; const keys = a.keys.includes(id) ? a.keys.filter(x => x !== id) : [...a.keys, id]; if (!keys.length) { toast('Keep at least one in the group.'); break; } setActive({ ...a, keys }); render(); break; }
+    case 'pickOpen': S.pickOpen = !S.pickOpen; render(); break;
+    case 'hole': { const a = getActive(); if (a) setActive({ ...a, hole: Number(id) }); S.hole[S.scoreRound] = Number(id); render(); window.scrollTo(0, 0); break; }
+    case 'startRound': S.startRound = id; S.startSel = []; render(); break;
+    case 'startPick': { const sel = S.startSel || []; S.startSel = sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id]; render(); break; }
+    case 'teeOff': {
+      const rr = S.rounds[S.startRound]; if (!rr || !(S.startSel || []).length) break;
+      setActive({ roundId: rr.id, keys: S.startSel, hole: firstOpenHole(rr, S.startSel), startedAt: Date.now() });
+      S.startSel = []; S.finished = null; S.pickOpen = false;
+      if (rr.status !== 'live' && rr.status !== 'final') updateDoc('rounds/' + rr.id, { status: 'live' });
+      toast('Hit \'em straight.'); render(); window.scrollTo(0, 0); break;
     }
-    case 'pickDone': S.pickOpen = false; render(); break;
-    case 'pickOpen': S.pickOpen = true; render(); break;
-    case 'hole': S.hole[S.scoreRound] = Number(id); render(); break;
+    case 'finishAsk': S.finishing = true; S.pickOpen = false; render(); window.scrollTo(0, 0); break;
+    case 'finishCancel': S.finishing = false; render(); break;
+    case 'finishDo': {
+      const a = getActive(); if (!a) break;
+      if ($('#finalIn')?.checked) updateDoc('rounds/' + a.roundId, { status: 'final' });
+      S.finished = a.roundId; S.finishing = false; setActive(null); render(); window.scrollTo(0, 0); break;
+    }
+    case 'newRound': S.finished = null; render(); break;
+    case 'seeCards': S.cardRound = id; S.cardPlayer = ''; go('cards'); break;
+    case 'setStatus': updateDoc('rounds/' + id, { status: b.dataset.s }); toast(b.dataset.s === 'final' ? 'Round marked Final. Points and handicaps updated.' : b.dataset.s === 'live' ? 'Round is live.' : 'Round reopened.'); break;
     case 'setpar': case 'inc': case 'dec': case 'pickup': {
-      const C = course(r); const h = S.hole[r.id] || currentHole(r); S.hole[r.id] = h; const par = C.par[h - 1];
+      if (!r) break; const C = course(r); const h = getActive()?.hole || S.hole[r.id] || 1; const par = C.par[h - 1];
       const g = gv(r, id, h); let n;
       if (act === 'pickup') n = g === 'P' ? null : 'P';
       else if (g == null || g === 'P') n = act === 'dec' ? par - 1 : act === 'inc' ? par + 1 : par;
