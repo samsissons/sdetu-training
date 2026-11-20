@@ -445,7 +445,7 @@ function subscribe(timer) {
   const done = (k) => { S.loaded[k] = 1; if (['trip', 'players', 'rounds', 'scores'].every(x => S.loaded[x])) { clearTimeout(timer); if (S.mode === 'loading') S.mode = 'live'; } render(); };
   const onErr = (e) => { clearTimeout(timer); S.mode = 'offline'; S.err = e?.message; render(); };
   const intoMap = snap => Object.fromEntries(snap.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
-  S.db.doc('trip/main').onSnapshot(s => { const d = s.exists ? s.data() : {}; S.real = S.real || {}; S.real.trip = { name: d.name || '', points: d.points || DEFAULT_POINTS }; if (!S.demo) S.trip = S.real.trip; done('trip'); }, onErr);
+  S.db.doc('trip/main').onSnapshot(s => { const d = s.exists ? s.data() : {}; S.real = S.real || {}; S.real.trip = { name: d.name || '', points: d.points || DEFAULT_POINTS, ...(d.pinHash ? { pinHash: d.pinHash } : {}) }; if (S.backend === 'firebase') S.canEdit = !!d.pinHash && LS.get('golf.pin', '') === d.pinHash; if (!S.demo) S.trip = S.real.trip; done('trip'); }, onErr);
   S.db.collection('players').onSnapshot(s => { S.real = S.real || {}; S.real.players = intoMap(s); if (!S.demo) S.players = S.real.players; done('players'); }, onErr);
   S.db.collection('rounds').onSnapshot(s => { S.real = S.real || {}; S.real.rounds = intoMap(s); if (!S.demo) S.rounds = S.real.rounds; done('rounds'); }, onErr);
   S.db.collection('scores').onSnapshot(s => {
@@ -545,7 +545,7 @@ function renderHeader() {
   $('#liveDot').hidden = !(S.mode === 'live' && !S.demo);
   $('#heroMeta').innerHTML = rs.length ? `<b class="num">${n} players · ${rs.length} rounds</b>${rs.map(r => esc(r.course || r.name)).join(' · ')}` : '';
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-current', t.dataset.view === S.view ? 'page' : 'false'));
-  $('#setupTab').hidden = !(S.canEdit || S.demo);
+  $('#setupTab').hidden = !(S.canEdit || S.demo || S.backend === 'firebase');
 }
 
 function demoBanner() {
@@ -619,7 +619,7 @@ function miniStandings() {
 }
 
 function welcome() {
-  const editor = S.canEdit;
+  const editor = S.canEdit || S.backend === 'firebase';
   return `<div class="stack">${demoBanner()}<section class="panel" style="padding:24px">
     <h2>Tee times not set yet</h2>
     <p class="sub" style="max-width:60ch">${editor ? 'Add the players and their handicaps, then add a round for each course with its format. Everyone with the link sees the live board as scores come in.' : 'The organiser hasn\'t set up the trip yet. Check back once players and rounds are added.'}</p>
@@ -712,6 +712,7 @@ function viewFormats() {
 
 /* ---------- setup ---------- */
 function viewSetup() {
+  if (S.backend === 'firebase' && !S.canEdit && !S.demo) return pinScreen();
   if (!(S.canEdit || S.demo)) return `<div class="empty">Only the organiser can change the setup.</div>`;
   const ps = sortedPlayers();
   return `<div class="stack">${demoBanner()}
@@ -732,7 +733,7 @@ function viewSetup() {
   </section>
   <section class="stack">
     <div class="spread"><h3>Rounds</h3><button class="btn primary sm" data-act="addRound">Add a round</button></div>
-    ${sortedRounds().map(roundEditor).join('') || '<div class="empty panel">No rounds yet. Add one for each course you\'re playing.</div>'}
+    ${sortedRounds().map(roundEditor).join('') || `<div class="empty panel">No rounds yet. Add one for each course you're playing.<div style="margin-top:12px"><button class="btn flagb sm" data-act="seedPeninsula">Add Portsea, Sorrento and The Dunes</button></div></div>`}
   </section></div>`;
 }
 function roundEditor(r) {
@@ -864,6 +865,13 @@ document.addEventListener('click', e => {
     case 'addTeam': updateDoc('rounds/' + id, { teams: [...(r.teams || []), { id: uid('t'), name: '', playerIds: [] }] }); break;
     case 'dropTeam': updateDoc('rounds/' + id, { teams: (r.teams || []).slice(0, -1) }); break;
     case 'addSide': updateDoc('rounds/' + id, { sides: [...(r.sides || []), { id: uid('s'), label: '', winner: '', points: 2 }] }); break;
+    case 'seedPeninsula': {
+      const base = { date: '', status: 'upcoming', si: DEFAULT_SI, teams: [], sides: [], hcp: {} };
+      setDoc('rounds/r-portsea', { ...base, name: 'Round 1', course: 'Portsea Golf Club', format: 'stableford', order: 1, par: DEFAULT_PAR });
+      setDoc('rounds/r-sorrento', { ...base, name: 'Round 2', course: 'Sorrento Golf Club', format: 'fourbbb', order: 2, par: [4,3,5,4,3,4,4,4,5, 4,5,4,3,4,3,4,3,4] });
+      setDoc('rounds/r-dunes', { ...base, name: 'Round 3', course: 'The Dunes Golf Links', format: 'ambrose', teamSize: 4, order: 3, par: [4,4,3,4,5,3,5,4,4, 4,4,5,3,4,4,5,3,4] });
+      toast('Added. Check par and index against each scorecard.'); break;
+    }
     case 'delSide': updateDoc('rounds/' + id, { sides: (r.sides || []).filter(s => s.id !== b.dataset.s) }); break;
   }
 });
@@ -908,9 +916,45 @@ document.addEventListener('submit', e => {
   $('#newPName').value = ''; $('#newPHcp').value = ''; $('#newPName').focus();
 });
 
+/* ---------- organiser PIN (web version) ---------- */
+async function sha(t) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('golftrip:' + t)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+function pinScreen() {
+  const has = !!S.trip.pinHash;
+  return `<div class="stack"><section class="panel stack" style="max-width:420px">
+    <h3>${has ? 'Organiser PIN' : 'Set an organiser PIN'}</h3>
+    <p class="sub" style="margin:0">${has ? 'Setup is locked so only the organiser changes players, courses and teams. Everyone can still enter scores.' : 'Choose a PIN to lock Setup. You\'ll need it on any phone you organise from. Keep it to yourself.'}</p>
+    <form id="pinForm" class="row"><input class="inp num" id="pinIn" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN" style="max-width:160px" required><button class="btn primary">${has ? 'Unlock' : 'Set PIN'}</button></form>
+  </section></div>`;
+}
+async function unlock(pin) {
+  if (!pin) return;
+  const h = await sha(pin);
+  if (!S.trip.pinHash) { await setDoc('trip/main', { ...S.trip, pinHash: h }); }
+  else if (S.trip.pinHash !== h) { toast('That PIN doesn\'t match.'); return; }
+  LS.set('golf.pin', h); S.canEdit = true; render();
+}
+document.addEventListener('submit', e => { if (e.target.id !== 'pinForm') return; e.preventDefault(); unlock($('#pinIn').value.trim()); });
+
+/* Firebase adapter: same shape as the artifact db (doc/collection, set/update/get/delete/onSnapshot) */
+function firebaseDb(fs) {
+  const wrap = ref => ({ set: d => ref.set(d), update: d => ref.set(d, { merge: true }), delete: () => ref.delete(), get: () => ref.get(), onSnapshot: (n, e) => ref.onSnapshot(n, e) });
+  return { doc: p => wrap(fs.doc(p)), collection: p => ({ onSnapshot: (n, e) => fs.collection(p).onSnapshot(n, e) }) };
+}
+async function initFirebase(cfg) {
+  S.backend = 'firebase';
+  const timer = setTimeout(() => { if (S.mode === 'loading') { S.mode = 'offline'; render(); } }, 12000);
+  try {
+    firebase.initializeApp(cfg);
+    await firebase.auth().signInAnonymously();
+    S.db = firebaseDb(firebase.firestore()); S.canWrite = true;
+    subscribe(timer);
+  } catch (e) { clearTimeout(timer); S.mode = 'offline'; S.err = e?.message; render(); }
+}
+
 /* ---------- boot ---------- */
 async function init() {
   route(); render();
+  if (window.GOLF_FIREBASE_CONFIG && window.firebase) { initFirebase(window.GOLF_FIREBASE_CONFIG); return; }
   const c = window.claude;
   if (!c || typeof c.use !== 'function') { startDemo(); return; }
   const timer = setTimeout(() => { if (S.mode === 'loading') { S.mode = 'offline'; render(); } }, 10000);

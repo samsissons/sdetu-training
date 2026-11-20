@@ -18,3 +18,12 @@ It is published as a claude.ai Artifact with a shared database (`db` capability)
 - `scores/{roundId}__{key}`: `{ roundId, key, holes: { "1": 4, "2": "P", ... } }`. `key` is a player id, or a team id for Ambrose.
 
 Open `index.html` outside claude.ai and it runs a local sample trip with made-up players.
+
+## No-login web version (GitHub Pages + Firebase)
+`docs/` holds a version anyone can open without an account. Rebuild it with `golf-trip/build-web.sh` after changing `golf-trip/index.html`.
+
+1. Create a free Firebase project. Add a Web app and paste its config into `docs/firebase-config.js` as `window.GOLF_FIREBASE_CONFIG = {...}`.
+2. In Firebase: Authentication > Sign-in method > enable **Anonymous**. Firestore Database > create database, then paste `docs/firestore.rules` into the Rules tab and publish.
+3. GitHub repo Settings > Pages: deploy from this branch, folder `/docs`.
+
+Setup is locked with an organiser PIN chosen on first use. Anyone with the link can enter scores.
