@@ -2,7 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Cinzel:wght@600;700&family=Instrument+Sans:wght@400;500;600;700&display=swap">
 <style>
 /* Layout: a hand-operated tournament leaderboard. Green header band, white slotted board,
    red numbers for under par. One column on phones, wider board on desktop. */
@@ -12,6 +12,8 @@
   --tile:#ffffff; --tile-line:#c6d1c2; --chip:#dce5d8; --good:#1e6b4b;
   --shadow:0 1px 0 rgba(17,36,26,.06), 0 8px 24px -12px rgba(17,36,26,.25);
   --f-display:"Big Shoulders Display","Oswald","Arial Narrow",Impact,sans-serif;
+  --f-honours:"Cinzel","Trajan Pro",Georgia,serif;
+  --wood:#4a2a17; --wood-2:#5e3820; --gilt:#d9b25c; --gilt-dim:#b8924a;
   --f-body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
@@ -115,6 +117,19 @@ h3{font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-si
 .lightbox .bar small{opacity:.75}
 .lbb{background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:999px;padding:8px 14px;font-weight:700}
 .lbb.del{background:rgba(255,93,110,.25)}
+.honours{border-radius:14px;padding:22px 18px 26px;color:var(--gilt);box-shadow:var(--shadow),inset 0 0 0 6px rgba(0,0,0,.18),inset 0 0 0 8px var(--gilt-dim);
+  background:linear-gradient(180deg,rgba(255,255,255,.06),transparent 30%,rgba(0,0,0,.18)),repeating-linear-gradient(92deg,var(--wood) 0 7px,var(--wood-2) 7px 9px,var(--wood) 9px 19px,#432514 19px 21px)}
+.honours h2{font-family:var(--f-honours);font-weight:700;text-align:center;font-size:clamp(22px,6vw,34px);letter-spacing:.12em;color:var(--gilt);text-shadow:0 1px 0 rgba(0,0,0,.5)}
+.honours .rule{height:2px;background:linear-gradient(90deg,transparent,var(--gilt),transparent);margin:12px auto 16px;max-width:320px}
+.hrow{display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 4px;border-bottom:1px solid rgba(217,178,92,.22);font-family:var(--f-honours);text-shadow:0 1px 0 rgba(0,0,0,.5)}
+.hrow:last-child{border-bottom:0}
+.hrow .yr{font-size:22px;font-weight:700;font-variant-numeric:lining-nums tabular-nums}
+.hrow .nm{font-size:19px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;min-width:0;overflow-wrap:anywhere}
+.hrow .nm small{white-space:normal;overflow:visible;display:block;font-family:var(--f-body);font-size:12px;letter-spacing:.02em;text-transform:none;color:#e9d9b4;opacity:.85;font-weight:500;text-shadow:none}
+.hrow .tbd{opacity:.7;font-style:italic}
+.hrow .ed{font-family:var(--f-body);background:rgba(0,0,0,.25);color:var(--gilt);border:1px solid rgba(217,178,92,.4);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;text-shadow:none}
+.spoon{font-family:var(--f-body);font-size:12px;color:#e9d9b4;opacity:.85}
+@media (max-width:520px){.hrow{grid-template-columns:58px minmax(0,1fr) auto}.hrow .yr{font-size:19px}.hrow .nm{font-size:16px}}
 .nudge{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border:1.5px dashed var(--green-2);border-radius:12px;padding:10px 14px;font-size:13px;font-weight:600}
 .who b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .who small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -262,6 +277,7 @@ table.st{width:100%;border-collapse:collapse;font-size:14px}
     <button class="tab" data-view="players">Players</button>
     <button class="tab" data-view="photos">Photos</button>
     <button class="tab" data-view="trip">Trip standings</button>
+    <button class="tab" data-view="winners">Past winners</button>
     <button class="tab" data-view="formats">Formats</button>
     <button class="tab" data-view="setup" id="setupTab">Setup</button>
   </div>
@@ -300,7 +316,7 @@ const FORMATS = {
 
 const S = {
   mode: 'loading', db: null, user: null, canEdit: false, canWrite: true, demo: false, realEmpty: false,
-  trip: { name: '', points: DEFAULT_POINTS }, players: {}, rounds: {}, scores: {}, media: {},
+  trip: { name: '', points: DEFAULT_POINTS }, players: {}, rounds: {}, scores: {}, media: {}, winners: {},
   loaded: {}, view: 'board', boardRound: null, scoreRound: null, open: {}, editRound: null, hole: {},
   flash: new Set(), real: null,
 };
@@ -478,6 +494,7 @@ function subscribe(timer) {
   S.db.doc('trip/main').onSnapshot(s => { const d = s.exists ? s.data() : {}; S.real = S.real || {}; S.real.trip = { name: d.name || '', points: d.points || DEFAULT_POINTS, ...(d.pinHash ? { pinHash: d.pinHash } : {}) }; if (S.backend === 'firebase') S.canEdit = !!d.pinHash && LS.get('golf.pin', '') === d.pinHash; if (!S.demo) S.trip = S.real.trip; done('trip'); }, onErr);
   S.db.collection('players').onSnapshot(s => { S.real = S.real || {}; S.real.players = intoMap(s); if (!S.demo) S.players = S.real.players; done('players'); }, onErr);
   S.db.collection('rounds').onSnapshot(s => { S.real = S.real || {}; S.real.rounds = intoMap(s); if (!S.demo) S.rounds = S.real.rounds; done('rounds'); }, onErr);
+  S.db.collection('winners').onSnapshot(s => { S.real = S.real || {}; S.real.winners = intoMap(s); if (!S.demo) S.winners = S.real.winners; render(); }, () => {});
   S.db.collection('media').onSnapshot(s => { S.real = S.real || {}; S.real.media = intoMap(s); if (!S.demo) S.media = S.real.media; render(); }, () => {});
   S.db.collection('scores').onSnapshot(s => {
     const next = intoMap(s);
@@ -532,18 +549,23 @@ function sampleTrip() {
   rounds.rs1.teams.forEach(t => play(rounds.rs1, t.id, ambroseHcp(rounds.rs1, t.playerIds), 18, -0.1));
   const thruR2 = [11, 12, 10, 11, 9, 12];
   rounds.rs2.teams.forEach((t, i) => t.playerIds.forEach(pid => play(rounds.rs2, pid, Math.round(players[pid].hcp * .9), thruR2[i], 0.85)));
-  return { trip: { name: 'Boys Trip 2026', points: DEFAULT_POINTS }, players, rounds, scores };
+  const winners = {
+    w1: { id: 'w1', year: '2025', champion: 'Johnno Price', venue: 'Barwon Heads & 13th Beach', note: '41 points', runnerUp: 'Davo Singh', spoon: 'Smithy Lane' },
+    w2: { id: 'w2', year: '2024', champion: 'Gaz Moretti', venue: 'Yarra Valley', note: '', runnerUp: 'Dazza Kerr', spoon: 'Robbo Nguyen' },
+    w3: { id: 'w3', year: '2023', champion: 'Davo Singh', venue: 'Mornington Peninsula', note: 'Won by a point', runnerUp: '', spoon: 'Hendo Walsh' },
+  };
+  return { trip: { name: 'Boys Trip 2026', points: DEFAULT_POINTS }, players, rounds, scores, winners };
 }
 function startDemo() {
   const t = sampleTrip();
-  S.demo = true; S.trip = t.trip; S.players = t.players; S.rounds = t.rounds; S.scores = t.scores; S.media = {};
+  S.demo = true; S.trip = t.trip; S.players = t.players; S.rounds = t.rounds; S.scores = t.scores; S.media = {}; S.winners = t.winners;
   if (S.mode === 'loading' || S.mode === 'offline') S.mode = 'demo';
   S.boardRound = 'rs2'; S.scoreRound = 'rs2';
   render();
 }
 function exitDemo() {
   S.demo = false; const R = S.real || {};
-  S.trip = R.trip || { name: '', points: DEFAULT_POINTS }; S.players = R.players || {}; S.rounds = R.rounds || {}; S.scores = R.scores || {}; S.media = R.media || {};
+  S.trip = R.trip || { name: '', points: DEFAULT_POINTS }; S.players = R.players || {}; S.rounds = R.rounds || {}; S.scores = R.scores || {}; S.media = R.media || {}; S.winners = R.winners || {};
   S.boardRound = null; S.scoreRound = null; render();
 }
 
@@ -870,7 +892,7 @@ function render() {
   let selStart = null; try { selStart = focusId ? ae.selectionStart : null; } catch (e) {}
   const dirty = {}; main.querySelectorAll('[data-dirty]').forEach(el => { if (el.id) dirty[el.id] = el.value; });
   const scrollY = window.scrollY;
-  const views = { board: viewBoard, score: viewScore, cards: viewCards, players: viewPlayers, photos: viewPhotos, trip: viewTrip, formats: viewFormats, setup: viewSetup };
+  const views = { board: viewBoard, score: viewScore, cards: viewCards, players: viewPlayers, photos: viewPhotos, trip: viewTrip, winners: viewWinners, formats: viewFormats, setup: viewSetup };
   main.innerHTML = (views[S.view] || viewBoard)();
   renderLightbox();
   for (const id in dirty) { const el = document.getElementById(id); if (el) { el.value = dirty[id]; el.dataset.dirty = '1'; } }
@@ -879,7 +901,7 @@ function render() {
 }
 
 /* ---------- routing ---------- */
-const VIEWS = ['board', 'score', 'cards', 'players', 'photos', 'trip', 'formats', 'setup'];
+const VIEWS = ['board', 'score', 'cards', 'players', 'photos', 'trip', 'winners', 'formats', 'setup'];
 function route() { const h = location.hash.slice(1); S.view = VIEWS.includes(h) ? h : 'board'; }
 function go(v) { if (v !== 'players') S.profile = null; if (location.hash.slice(1) !== v) location.hash = v; else { S.view = v; render(); } window.scrollTo(0, 0); }
 window.addEventListener('hashchange', () => { route(); render(); });
@@ -896,6 +918,14 @@ document.addEventListener('click', e => {
     case 'profile': S.profile = id || null; render(); window.scrollTo(0, 0); break;
     case 'iam': LS.set('golf.me', id); toast('Got it. You\'re ' + firstName(id) + '.'); render(); break;
     case 'mfilter': S.mediaFilter = id; render(); break;
+    case 'addWinner': S.editWinner = 'new'; S.winnerDraft = null; render(); $('#wYear')?.focus(); break;
+    case 'editWinner': S.editWinner = id; S.confirmWinner = null; render(); $('#winnerForm')?.scrollIntoView({ behavior: 'smooth' }); break;
+    case 'cancelWinner': S.editWinner = null; render(); break;
+    case 'delWinner': if (S.confirmWinner !== id) { S.confirmWinner = id; render(); break; }
+      if (S.demo) delete S.winners[id]; else delDoc('winners/' + id); S.editWinner = null; S.confirmWinner = null; render(); break;
+    case 'crown': { const { list } = tripStandings(); const w = list[0], last = list[list.length - 1];
+      S.editWinner = 'new'; S.winnerDraft = { year: String(new Date().getFullYear()), champion: pname(w.pid), runnerUp: list[1] ? pname(list[1].pid) : '', spoon: last && last !== w ? pname(last.pid) : '', note: w.total + ' points', venue: [...new Set(sortedRounds().map(r => r.course).filter(Boolean))].join(', ') };
+      render(); break; }
     case 'openMedia': if (id) { S.lightbox = id; S.confirmMedia = null; lbShown = null; render(); } break;
     case 'closeMedia': S.lightbox = null; render(); break;
     case 'delMedia': if (S.confirmMedia !== id) { S.confirmMedia = id; lbShown = null; render(); } else deleteMedia(id); break;
@@ -992,6 +1022,52 @@ document.addEventListener('submit', e => {
   const hcp = Number($('#newPHcp').value) || 0;
   setDoc('players/' + uid('p'), { name, hcp });
   $('#newPName').value = ''; $('#newPHcp').value = ''; $('#newPName').focus();
+});
+
+/* ---------- past winners (honours board) ---------- */
+function playerByName(n) { n = String(n || '').trim().toLowerCase(); return n ? Object.values(S.players).find(p => p.name.trim().toLowerCase() === n) : null; }
+function viewWinners() {
+  const can = S.canEdit || S.demo;
+  const list = Object.values(S.winners).sort((a, b) => String(b.year).localeCompare(String(a.year), undefined, { numeric: true }));
+  const yearNow = String(new Date().getFullYear());
+  const { list: st } = tripStandings(); const leader = st.find(x => x.total > 0);
+  const thisDone = list.some(w => String(w.year) === yearNow);
+  const allFinal = sortedRounds().length && sortedRounds().every(r => r.status === 'final');
+  const row = w => { const p = playerByName(w.champion);
+    const extra = [w.venue, w.note].filter(Boolean).map(esc).join(' · ');
+    const sub = [extra, w.runnerUp ? 'Runner-up ' + esc(w.runnerUp) : '', w.spoon ? `<span class="spoon">Wooden spoon ${esc(w.spoon)}</span>` : ''].filter(Boolean).join(' · ');
+    return `<div class="hrow"><span class="yr">${esc(w.year)}</span><span class="who">${p ? avatar(p.id, 38) : ''}<span class="nm">${esc(w.champion)}${sub ? `<small>${sub}</small>` : ''}</span></span>${can ? `<button class="ed" data-act="editWinner" data-id="${esc(w.id)}">Edit</button>` : '<span></span>'}</div>`; };
+  const ed = S.editWinner; const w = ed === 'new' ? (S.winnerDraft || {}) : (S.winners[ed] || null);
+  const form = (ed && w) ? `<section class="panel stack" id="winnerForm">
+      <h3>${ed === 'new' ? 'Add a winner' : 'Edit ' + esc(w.year)}</h3>
+      <form class="stack" id="wForm" style="gap:12px"><div class="grid2">
+        <div class="field"><label for="wYear">Year</label><input class="inp num" id="wYear" required maxlength="12" value="${esc(w.year || '')}" placeholder="2025"></div>
+        <div class="field"><label for="wChamp">Champion</label><input class="inp" id="wChamp" required maxlength="60" list="wNames" value="${esc(w.champion || '')}" placeholder="Name"></div>
+        <div class="field"><label for="wVenue">Where</label><input class="inp" id="wVenue" maxlength="80" value="${esc(w.venue || '')}" placeholder="Courses or town"></div>
+        <div class="field"><label for="wNote">Winning score or note</label><input class="inp" id="wNote" maxlength="80" value="${esc(w.note || '')}" placeholder="68 points"></div>
+        <div class="field"><label for="wRunner">Runner-up</label><input class="inp" id="wRunner" maxlength="60" list="wNames" value="${esc(w.runnerUp || '')}"></div>
+        <div class="field"><label for="wSpoon">Wooden spoon (last place)</label><input class="inp" id="wSpoon" maxlength="60" list="wNames" value="${esc(w.spoon || '')}"></div>
+      </div><datalist id="wNames">${sortedPlayers().map(p => `<option value="${esc(p.name)}"></option>`).join('')}</datalist>
+      <div class="row"><button class="btn primary">Save</button><button type="button" class="btn" data-act="cancelWinner">Cancel</button>
+        ${ed !== 'new' ? `<button type="button" class="btn danger sm" data-act="delWinner" data-id="${esc(ed)}">${S.confirmWinner === ed ? 'Tap again to remove' : 'Remove'}</button>` : ''}</div></form></section>` : '';
+  return `<div class="stack">${demoBanner()}
+    <section class="honours" aria-label="Honours board">
+      <h2>Past Champions</h2><div class="rule"></div>
+      ${!thisDone ? `<div class="hrow"><span class="yr">${yearNow}</span><span class="nm tbd">${leader ? `To be decided<small>${esc(pname(leader.pid))} leads on ${leader.total} pts</small>` : 'To be decided'}</span><span></span></div>` : ''}
+      ${list.map(row).join('') || (thisDone ? '' : '<div class="hrow"><span class="yr"></span><span class="nm tbd"><small>Past winners go here. The organiser can add them.</small></span><span></span></div>')}
+    </section>
+    ${can ? `<div class="row">${!ed ? '<button class="btn primary sm" data-act="addWinner">Add a past winner</button>' : ''}${allFinal && !thisDone && leader && !ed ? `<button class="btn flagb sm" data-act="crown">Put ${esc(firstName(leader.pid))} on the board for ${yearNow}</button>` : ''}</div>` : ''}
+    ${form}
+  </div>`;
+}
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'wForm') return; e.preventDefault();
+  const v = id => ($('#' + id)?.value || '').trim();
+  const data = { year: v('wYear'), champion: v('wChamp'), venue: v('wVenue'), note: v('wNote'), runnerUp: v('wRunner'), spoon: v('wSpoon') };
+  if (!data.year || !data.champion) return;
+  const id = S.editWinner === 'new' ? uid('w') : S.editWinner;
+  if (S.demo) { S.winners[id] = { id, ...data }; } else setDoc('winners/' + id, data);
+  S.editWinner = null; S.winnerDraft = null; toast('Added to the board.'); render();
 });
 
 /* ---------- players, photos & media ---------- */
